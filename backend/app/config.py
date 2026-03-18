@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql://evalscope:evalscope@localhost:5433/evalscope",
+        default="postgresql://evalscope:evalscope@localhost:6001/evalscope",
         alias="DATABASE_URL"
     )
 
