@@ -30,7 +30,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-56 flex-col border-r bg-card">
       <div className="flex h-12 items-center border-b px-4">
-        <span className="text-sm font-semibold tracking-tight">EvalScope</span>
+        <span className="text-sm font-semibold tracking-tight">SwanEVAL</span>
       </div>
       <nav className="flex-1 space-y-0.5 p-2">
         {nav.map((item) => {

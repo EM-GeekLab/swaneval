@@ -39,6 +39,9 @@ export interface LLMModel {
   provider: string;
   endpoint_url: string;
   model_type: "api" | "local" | "huggingface";
+  description: string;
+  model_name: string;
+  max_tokens: number | null;
   created_at: string;
 }
 

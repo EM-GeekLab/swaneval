@@ -21,6 +21,9 @@ export function useCreateModel() {
       endpoint_url: string;
       api_key?: string;
       model_type: string;
+      description?: string;
+      model_name?: string;
+      max_tokens?: number;
     }) => {
       const res = await api.post<LLMModel>("/models", data);
       return res.data;
@@ -36,5 +39,16 @@ export function useDeleteModel() {
       await api.delete(`/models/${id}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
+  });
+}
+
+export function useTestModel() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post<{ ok: boolean; message: string }>(
+        `/models/${id}/test`
+      );
+      return res.data;
+    },
   });
 }

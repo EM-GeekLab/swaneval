@@ -1,0 +1,5 @@
+{"prompt": "Reply with only the word YES.", "expected": "YES"}
+{"prompt": "Reply with only the word NO.", "expected": "NO"}
+{"prompt": "What is 1+1? Reply with only the number.", "expected": "2"}
+{"prompt": "Name one color of the rainbow. Reply with one word only.", "expected": "red"}
+{"prompt": "Reply with exactly three words: I am ready", "expected": "I am ready"}

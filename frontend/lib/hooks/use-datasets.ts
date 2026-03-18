@@ -56,6 +56,23 @@ export function useUploadDataset() {
   });
 }
 
+export function useMountDataset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      name: string;
+      description?: string;
+      server_path: string;
+      format?: string;
+      tags?: string;
+    }) => {
+      const res = await api.post<Dataset>("/datasets/mount", data);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+  });
+}
+
 export function useDeleteDataset() {
   const qc = useQueryClient();
   return useMutation({
