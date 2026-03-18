@@ -7,10 +7,8 @@ pydantic-settings>=2.1.0
 # Database
 sqlmodel>=0.0.22
 sqlalchemy>=2.0.0
-greenlet>=3.0.0
 psycopg2-binary>=2.9.0
 alembic>=1.13.0
-asyncpg>=0.29.0
 
 # Authentication
 python-jose[cryptography]>=3.3.0
@@ -30,5 +28,4 @@ aiofiles>=23.2.0
 
 # Dev
 pytest>=7.4.0
-pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0

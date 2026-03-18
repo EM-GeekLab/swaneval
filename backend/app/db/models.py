@@ -56,7 +56,6 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
-    # Relationships
     evaluations: List["Evaluation"] = Relationship(back_populates="user")
     models: List["ModelConfig"] = Relationship(back_populates="user")
 
@@ -76,9 +75,8 @@ class ModelConfig(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
-    # Relationships
     user: Optional["User"] = Relationship(back_populates="models")
-    evaluations: List["Evaluation"] = Relationship(back_populates="model_config")
+    evaluations: List["Evaluation"] = Relationship(back_populates="eval_model")
 
 
 class Dataset(SQLModel, table=True):
@@ -97,7 +95,6 @@ class Dataset(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
-    # Relationships
     evaluations: List["Evaluation"] = Relationship(back_populates="dataset")
 
 
@@ -112,12 +109,10 @@ class Evaluation(SQLModel, table=True):
     dataset_id: int = Field(foreign_key="datasets.id")
     user_id: int = Field(foreign_key="users.id")
 
-    # Configuration
     generation_config: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     dataset_args: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     eval_config: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
 
-    # Results
     status: TaskStatus = Field(sa_column=Column(SQLEnum(TaskStatus), default=TaskStatus.PENDING))
     progress: float = Field(default=0.0)
     metrics: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
@@ -126,7 +121,6 @@ class Evaluation(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
     completed_at: Optional[datetime] = Field(default=None)
 
-    # Relationships
     eval_model: Optional["ModelConfig"] = Relationship(back_populates="evaluations")
     dataset: Optional["Dataset"] = Relationship(back_populates="evaluations")
     user: Optional["User"] = Relationship(back_populates="evaluations")
@@ -148,5 +142,4 @@ class EvaluationResult(SQLModel, table=True):
     latency_ms: Optional[float] = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
-    # Relationships
     evaluation: Optional["Evaluation"] = Relationship(back_populates="results")

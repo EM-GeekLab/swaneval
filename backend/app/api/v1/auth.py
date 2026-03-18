@@ -16,16 +16,12 @@ from app.security import (
 router = APIRouter()
 
 
-# Pydantic models
 class UserResponse(BaseModel):
     """User response model."""
     id: int
     username: str
     email: str
     role: str
-
-    class Config:
-        from_attributes = True
 
 
 class UserCreate(BaseModel):
@@ -49,7 +45,6 @@ class LoginRequest(BaseModel):
 
 
 # In-memory user store for demo (replace with database)
-# Using plain text password for demo - in production use proper hashing
 USERS_DB = {
     "admin": {
         "id": 1,
@@ -68,7 +63,7 @@ def get_user_from_db(username: str) -> Optional[dict]:
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login endpoint."""
     user = get_user_from_db(form_data.username)
     if not user or not verify_password(form_data.password, user["hashed_password"]):
@@ -93,7 +88,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate):
+def register(user: UserCreate):
     """Register a new user."""
     if user.username in USERS_DB:
         raise HTTPException(
@@ -122,7 +117,7 @@ async def register(user: UserCreate):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
+def get_me(current_user: dict = Depends(get_current_user)):
     """Get current user."""
     user = get_user_from_db(current_user["username"])
     if not user:

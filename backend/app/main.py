@@ -1,35 +1,30 @@
 """FastAPI application entry point."""
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import SQLModel
 
 from app.config import settings
-from app.database import engine
+from app.database import create_db_and_tables
 
 # Import all models so they register with SQLModel.metadata
 import app.db.models  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    # Startup
-    # Create database tables
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+        create_db_and_tables()
+        logger.info("Database tables created successfully.")
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             f"Could not connect to database on startup: {e}. "
             "The app will start, but database operations will fail until the DB is available."
         )
-
     yield
-
-    # Shutdown
-    await engine.dispose()
 
 
 app = FastAPI(
@@ -50,7 +45,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Import and include routers
 from app.api.v1 import models, datasets, evaluations, results, tasks, auth
 
@@ -63,7 +57,7 @@ app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 
 
 @app.get("/")
-async def root():
+def root():
     """Root endpoint."""
     return {
         "name": settings.app_name,
@@ -73,6 +67,6 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
+def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}

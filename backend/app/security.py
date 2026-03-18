@@ -43,7 +43,7 @@ def decode_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """Get current user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
