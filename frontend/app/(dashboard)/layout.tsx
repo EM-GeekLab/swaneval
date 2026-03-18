@@ -21,7 +21,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (ready && !token && !localStorage.getItem("token")) {
-      router.push("/");
+      router.replace("/login");
     }
   }, [ready, token, router]);
 

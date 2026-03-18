@@ -35,8 +35,7 @@ export default function LoginPage() {
       localStorage.setItem("token", tokenData.access_token);
       const user = await me.mutateAsync();
       setAuth(tokenData.access_token, user);
-      router.push("/");
-      router.refresh();
+      router.replace("/");
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "response" in err

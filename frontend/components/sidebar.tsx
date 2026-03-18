@@ -65,7 +65,7 @@ export function Sidebar() {
             <button
               onClick={() => {
                 logout();
-                window.location.href = "/";
+                window.location.href = "/login";
               }}
               className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               title="Logout"
