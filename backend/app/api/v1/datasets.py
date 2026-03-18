@@ -18,7 +18,7 @@ class DatasetCreate(SQLModel):
     source: str  # preset, huggingface, custom, server_path
     path: str
     tags: Optional[List[str]] = None
-    metadata: Optional[dict] = None
+    extra_metadata: Optional[dict] = None
 
 
 class DatasetResponse(SQLModel):
@@ -29,7 +29,7 @@ class DatasetResponse(SQLModel):
     path: str
     version: int
     tags: Optional[List[str]] = None
-    metadata: Optional[dict] = None
+    extra_metadata: Optional[dict] = None
     row_count: Optional[int] = None
     created_at: str
 
@@ -76,7 +76,7 @@ async def list_datasets(
             path=d["path"],
             version=1,
             tags=d.get("tags"),
-            metadata=None,
+            extra_metadata=None,
             row_count=None,
             created_at="2024-01-01T00:00:00"
         ))
@@ -93,7 +93,7 @@ async def list_datasets(
             path=d.path,
             version=d.version,
             tags=d.tags,
-            metadata=d.dataset_metadata,
+            extra_metadata=d.dataset_metadata,
             row_count=d.row_count,
             created_at=d.created_at.isoformat()
         ))
@@ -124,7 +124,7 @@ async def create_dataset(
         source=DatasetSource(dataset.source),
         path=dataset.path,
         tags=dataset.tags,
-        dataset_metadata=dataset.metadata,
+        dataset_metadata=dataset.extra_metadata,
         created_by=current_user["id"],
     )
     db.add(db_dataset)
@@ -138,7 +138,7 @@ async def create_dataset(
         path=db_dataset.path,
         version=db_dataset.version,
         tags=db_dataset.tags,
-        metadata=db_dataset.dataset_metadata,
+        extra_metadata=db_dataset.dataset_metadata,
         row_count=db_dataset.row_count,
         created_at=db_dataset.created_at.isoformat()
     )
@@ -182,7 +182,7 @@ async def upload_dataset(
         path=db_dataset.path,
         version=db_dataset.version,
         tags=db_dataset.tags,
-        metadata=db_dataset.dataset_metadata,
+        extra_metadata=db_dataset.dataset_metadata,
         row_count=db_dataset.row_count,
         created_at=db_dataset.created_at.isoformat()
     )
@@ -204,7 +204,7 @@ async def get_dataset(
                 path=d["path"],
                 version=1,
                 tags=d.get("tags"),
-                metadata=None,
+                extra_metadata=None,
                 row_count=None,
                 created_at="2024-01-01T00:00:00"
             )
@@ -224,7 +224,7 @@ async def get_dataset(
         path=dataset.path,
         version=dataset.version,
         tags=dataset.tags,
-        metadata=dataset.dataset_metadata,
+        extra_metadata=dataset.dataset_metadata,
         row_count=dataset.row_count,
         created_at=dataset.created_at.isoformat()
     )
