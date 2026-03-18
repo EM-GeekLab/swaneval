@@ -41,6 +41,7 @@ class EvalTask(SQLModel, table=True):
 
     status: TaskStatus = Field(
         sa_column=Column(SAEnum(TaskStatus), nullable=False, default=TaskStatus.pending)
+    )
     # 任务状态 / Task status (pending/running/paused/completed/failed)
 
     model_id: uuid.UUID = Field(foreign_key="llm_models.id")

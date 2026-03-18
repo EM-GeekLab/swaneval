@@ -41,7 +41,7 @@ class Dataset(SQLModel, table=True):
     source_uri: str = Field(default="")
     # 数据源URI / Source URI (file path or HF/MS dataset ID)
 
-    format: str = Field(default="jsonl", max_length="32")
+    format: str = Field(default="jsonl", max_length=32)
     # 数据格式 / Data format (jsonl, csv, parquet, etc)
 
     tags: str = Field(default="")  # comma-separated
