@@ -2,7 +2,14 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1",
-  headers: { "Content-Type": "application/json" },
+});
+
+// Auto-set Content-Type: let Axios handle multipart/form-data when body is FormData
+api.interceptors.request.use((config) => {
+  if (!(config.data instanceof FormData)) {
+    config.headers["Content-Type"] = "application/json";
+  }
+  return config;
 });
 
 api.interceptors.request.use((config) => {
