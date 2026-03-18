@@ -89,6 +89,7 @@ async def upload_dataset(
     )
     session.add(dv)
     await session.commit()
+    await session.refresh(ds)
 
     return ds
 
