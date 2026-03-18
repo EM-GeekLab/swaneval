@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -14,13 +15,18 @@ router = APIRouter(prefix="/models", tags=["models"])
 # ---------- Schemas ----------
 
 
-class ModelCreate(MLModel, table=False):
-    id: uuid.UUID | None = None  # type: ignore[assignment]
-    created_at: datetime | None = None  # type: ignore[assignment]
-    updated_at: datetime | None = None  # type: ignore[assignment]
+class ModelCreate(BaseModel):
+    name: str
+    source_type: ModelSourceType
+    path_or_endpoint: str
+    revision: str | None = None
+    precision: str | None = None
+    device_map: str | None = None
+    api_key: str | None = None
+    extra_params: dict | None = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "name": "Qwen-7B",
                 "source_type": "huggingface",
@@ -29,16 +35,34 @@ class ModelCreate(MLModel, table=False):
                 "precision": "fp16",
             }
         }
+    }
 
 
-class ModelRead(MLModel, table=False):
-    pass
+class ModelRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    source_type: ModelSourceType
+    path_or_endpoint: str
+    revision: str | None
+    precision: str | None
+    device_map: str | None
+    api_key: str | None
+    extra_params: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-class ModelUpdate(MLModel, table=False):
-    name: str | None = None  # type: ignore[assignment]
-    source_type: ModelSourceType | None = None  # type: ignore[assignment]
-    path_or_endpoint: str | None = None  # type: ignore[assignment]
+class ModelUpdate(BaseModel):
+    name: str | None = None
+    source_type: ModelSourceType | None = None
+    path_or_endpoint: str | None = None
+    revision: str | None = None
+    precision: str | None = None
+    device_map: str | None = None
+    api_key: str | None = None
+    extra_params: dict | None = None
 
 
 # ---------- Endpoints ----------
@@ -46,7 +70,7 @@ class ModelUpdate(MLModel, table=False):
 
 @router.post("", response_model=ModelRead, status_code=status.HTTP_201_CREATED)
 async def create_model(payload: ModelCreate, session: AsyncSession = Depends(get_session)):
-    model = MLModel.model_validate(payload)
+    model = MLModel(**payload.model_dump())
     session.add(model)
     await session.commit()
     await session.refresh(model)

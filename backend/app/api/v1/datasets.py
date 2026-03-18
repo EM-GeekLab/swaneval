@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -14,30 +15,43 @@ router = APIRouter(prefix="/datasets", tags=["datasets"])
 # ---------- Schemas ----------
 
 
-class DatasetCreate(Dataset, table=False):
-    id: uuid.UUID | None = None  # type: ignore[assignment]
-    created_at: datetime | None = None  # type: ignore[assignment]
-    updated_at: datetime | None = None  # type: ignore[assignment]
+class DatasetCreate(BaseModel):
+    name: str
+    source_type: DatasetSourceType
+    source_path: str
+    description: str | None = None
+    version: str = "1.0"
+    row_count: int | None = None
+    schema_info: dict | None = None
 
 
-class DatasetRead(Dataset, table=False):
-    pass
+class DatasetRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    source_type: DatasetSourceType
+    source_path: str
+    description: str | None
+    version: str
+    row_count: int | None
+    schema_info: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-class DatasetUpdate(Dataset, table=False):
-    name: str | None = None  # type: ignore[assignment]
-    source_type: DatasetSourceType | None = None  # type: ignore[assignment]
-    source_path: str | None = None  # type: ignore[assignment]
+class DatasetUpdate(BaseModel):
+    name: str | None = None
+    source_type: DatasetSourceType | None = None
+    source_path: str | None = None
+    description: str | None = None
+    version: str | None = None
+    row_count: int | None = None
+    schema_info: dict | None = None
 
 
-class DatasetVersionCreate(Dataset, table=False):
-    id: uuid.UUID | None = None  # type: ignore[assignment]
-    name: str | None = None  # type: ignore[assignment]
-    source_type: DatasetSourceType | None = None  # type: ignore[assignment]
-    source_path: str | None = None  # type: ignore[assignment]
-    created_at: datetime | None = None  # type: ignore[assignment]
-    updated_at: datetime | None = None  # type: ignore[assignment]
-    version: str  # type: ignore[assignment]
+class DatasetVersionCreate(BaseModel):
+    version: str
 
 
 # ---------- Endpoints ----------
@@ -45,7 +59,7 @@ class DatasetVersionCreate(Dataset, table=False):
 
 @router.post("", response_model=DatasetRead, status_code=status.HTTP_201_CREATED)
 async def create_dataset(payload: DatasetCreate, session: AsyncSession = Depends(get_session)):
-    dataset = Dataset.model_validate(payload)
+    dataset = Dataset(**payload.model_dump())
     session.add(dataset)
     await session.commit()
     await session.refresh(dataset)
