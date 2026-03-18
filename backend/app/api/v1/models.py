@@ -1,5 +1,6 @@
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -73,6 +74,38 @@ async def update_model(
     await session.commit()
     await session.refresh(m)
     return m
+
+
+@router.post("/{model_id}/test")
+async def test_model_endpoint(
+    model_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    m = await session.get(LLMModel, model_id)
+    if not m:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Model not found")
+    try:
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if m.api_key:
+            headers["Authorization"] = f"Bearer {m.api_key}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                m.endpoint_url,
+                headers=headers,
+                json={
+                    "model": m.name,
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 1,
+                },
+            )
+        if resp.status_code < 400:
+            return {"ok": True, "message": f"Connected ({resp.status_code})"}
+        return {"ok": False, "message": f"HTTP {resp.status_code}"}
+    except httpx.TimeoutException:
+        return {"ok": False, "message": "Connection timed out"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)[:200]}
 
 
 @router.delete("/{model_id}", status_code=204)

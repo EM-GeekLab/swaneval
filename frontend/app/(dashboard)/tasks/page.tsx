@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-
 import {
   Dialog,
   DialogContent,
@@ -30,25 +29,41 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pause, Play, XCircle } from "lucide-react";
-import { useTasks, useCreateTask, usePauseTask, useResumeTask, useCancelTask } from "@/lib/hooks/use-tasks";
+import {
+  Plus,
+  Pause,
+  Play,
+  XCircle,
+  ChevronRight,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  useTasks,
+  useCreateTask,
+  usePauseTask,
+  useResumeTask,
+  useCancelTask,
+} from "@/lib/hooks/use-tasks";
 import { useModels } from "@/lib/hooks/use-models";
 import { useDatasets } from "@/lib/hooks/use-datasets";
 import { useCriteria } from "@/lib/hooks/use-criteria";
 import type { EvalTask } from "@/lib/types";
 
-const statusVariant = (s: EvalTask["status"]) => {
-  const map: Record<string, "success" | "warning" | "destructive" | "default" | "secondary"> = {
-    completed: "success",
-    running: "warning",
+const statusVariant = (
+  s: EvalTask["status"]
+): "default" | "secondary" | "destructive" | "outline" => {
+  const map: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    completed: "default",
+    running: "secondary",
     failed: "destructive",
-    pending: "secondary",
-    paused: "default",
+    pending: "outline",
+    paused: "outline",
   };
-  return map[s] || "default";
+  return map[s] || "outline";
 };
 
 export default function TasksPage() {
+  const router = useRouter();
   const { data: tasks = [], isLoading } = useTasks();
   const { data: models = [] } = useModels();
   const { data: datasets = [] } = useDatasets();
@@ -108,7 +123,7 @@ export default function TasksPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Tasks</h1>
+        <h1 className="text-lg font-semibold">评测任务 Evaluations</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -124,14 +139,21 @@ export default function TasksPage() {
                 <Label>Task Name</Label>
                 <Input
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, name: e.target.value })
+                  }
                   required
                 />
               </div>
 
               <div className="space-y-1">
                 <Label>Model</Label>
-                <Select value={form.model_id} onValueChange={(v) => setForm({ ...form, model_id: v })}>
+                <Select
+                  value={form.model_id}
+                  onValueChange={(v) =>
+                    setForm({ ...form, model_id: v })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
@@ -163,7 +185,9 @@ export default function TasksPage() {
                     </button>
                   ))}
                   {datasets.length === 0 && (
-                    <span className="text-xs text-muted-foreground">No datasets available</span>
+                    <span className="text-xs text-muted-foreground">
+                      No datasets available
+                    </span>
                   )}
                 </div>
               </div>
@@ -186,7 +210,9 @@ export default function TasksPage() {
                     </button>
                   ))}
                   {criteria.length === 0 && (
-                    <span className="text-xs text-muted-foreground">No criteria available</span>
+                    <span className="text-xs text-muted-foreground">
+                      No criteria available
+                    </span>
                   )}
                 </div>
               </div>
@@ -200,7 +226,9 @@ export default function TasksPage() {
                     min="0"
                     max="2"
                     value={form.temperature}
-                    onChange={(e) => setForm({ ...form, temperature: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, temperature: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-1">
@@ -208,7 +236,9 @@ export default function TasksPage() {
                   <Input
                     type="number"
                     value={form.max_tokens}
-                    onChange={(e) => setForm({ ...form, max_tokens: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, max_tokens: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-1">
@@ -217,12 +247,19 @@ export default function TasksPage() {
                     type="number"
                     min="1"
                     value={form.repeat_count}
-                    onChange={(e) => setForm({ ...form, repeat_count: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, repeat_count: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-1">
                   <Label>Seed Strategy</Label>
-                  <Select value={form.seed_strategy} onValueChange={(v) => setForm({ ...form, seed_strategy: v })}>
+                  <Select
+                    value={form.seed_strategy}
+                    onValueChange={(v) =>
+                      setForm({ ...form, seed_strategy: v })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -237,7 +274,12 @@ export default function TasksPage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={createTask.isPending || !form.model_id || form.dataset_ids.length === 0 || form.criteria_ids.length === 0}
+                disabled={
+                  createTask.isPending ||
+                  !form.model_id ||
+                  form.dataset_ids.length === 0 ||
+                  form.criteria_ids.length === 0
+                }
               >
                 {createTask.isPending ? "Creating..." : "Create & Run"}
               </Button>
@@ -263,11 +305,21 @@ export default function TasksPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    Loading...
+                  </TableCell>
                 </TableRow>
               ) : tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No tasks.</TableCell>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    No tasks.
+                  </TableCell>
                 </TableRow>
               ) : (
                 tasks.map((t) => {
@@ -279,35 +331,71 @@ export default function TasksPage() {
                         : "-";
 
                   return (
-                    <TableRow key={t.id}>
+                    <TableRow
+                      key={t.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/tasks/${t.id}`)}
+                    >
                       <TableCell>
-                        <Link href={`/tasks/${t.id}`} className="font-medium text-primary hover:underline">
-                          {t.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{t.name}</span>
+                          {t.status === "failed" && (
+                            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusVariant(t.status)}>{t.status}</Badge>
+                        <Badge variant={statusVariant(t.status)}>
+                          {t.status}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="font-mono">{t.repeat_count}</TableCell>
+                      <TableCell className="font-mono">
+                        {t.repeat_count}
+                      </TableCell>
                       <TableCell>{t.seed_strategy}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleString()}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(t.created_at).toLocaleString()}
+                      </TableCell>
                       <TableCell className="font-mono">{duration}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        {t.status === "running" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => pause.mutate(t.id)}>
-                            <Pause className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {(t.status === "paused" || t.status === "failed") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => resume.mutate(t.id)}>
-                            <Play className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {(t.status === "running" || t.status === "pending") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => cancel.mutate(t.id)}>
-                            <XCircle className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                      <TableCell className="text-right">
+                        <div
+                          className="flex items-center justify-end gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {t.status === "running" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => pause.mutate(t.id)}
+                            >
+                              <Pause className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {(t.status === "paused" ||
+                            t.status === "failed") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => resume.mutate(t.id)}
+                            >
+                              <Play className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {(t.status === "running" ||
+                            t.status === "pending") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => cancel.mutate(t.id)}
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

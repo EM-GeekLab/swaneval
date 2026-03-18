@@ -12,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -22,7 +24,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Upload, Trash2, Eye } from "lucide-react";
-import { useDatasets, useUploadDataset, useDeleteDataset, useDatasetPreview } from "@/lib/hooks/use-datasets";
+import {
+  useDatasets,
+  useUploadDataset,
+  useDeleteDataset,
+  useDatasetPreview,
+} from "@/lib/hooks/use-datasets";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -33,12 +40,16 @@ function formatBytes(bytes: number) {
 }
 
 export default function DatasetsPage() {
-  const { data: datasets = [], isLoading } = useDatasets();
+  const { data: datasets = [], isLoading, refetch } = useDatasets();
   const upload = useUploadDataset();
   const deleteMut = useDeleteDataset();
 
   const [open, setOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [form, setForm] = useState({ name: "", description: "", tags: "" });
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -48,15 +59,30 @@ export default function DatasetsPage() {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file) return;
-    await upload.mutateAsync({ file, name: form.name || file.name, description: form.description, tags: form.tags });
+    await upload.mutateAsync({
+      file,
+      name: form.name || file.name,
+      description: form.description,
+      tags: form.tags,
+    });
     setForm({ name: "", description: "", tags: "" });
     setOpen(false);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteMut.mutateAsync(deleteTarget.id);
+    } finally {
+      setDeleteTarget(null);
+      refetch();
+    }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Datasets</h1>
+        <h1 className="text-lg font-semibold">数据集 Datasets</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -70,7 +96,12 @@ export default function DatasetsPage() {
             <form onSubmit={handleUpload} className="space-y-3">
               <div className="space-y-1">
                 <Label>File (JSONL / CSV / JSON)</Label>
-                <Input ref={fileRef} type="file" accept=".jsonl,.csv,.json" required />
+                <Input
+                  ref={fileRef}
+                  type="file"
+                  accept=".jsonl,.csv,.json"
+                  required
+                />
               </div>
               <div className="space-y-1">
                 <Label>Name</Label>
@@ -84,7 +115,9 @@ export default function DatasetsPage() {
                 <Label>Description</Label>
                 <Input
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -95,7 +128,11 @@ export default function DatasetsPage() {
                   placeholder="math,reasoning"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={upload.isPending}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={upload.isPending}
+              >
                 <Upload className="mr-1 h-4 w-4" />
                 {upload.isPending ? "Uploading..." : "Upload"}
               </Button>
@@ -122,13 +159,19 @@ export default function DatasetsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-muted-foreground py-8"
+                  >
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : datasets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-muted-foreground py-8"
+                  >
                     No datasets. Upload one to get started.
                   </TableCell>
                 </TableRow>
@@ -140,14 +183,27 @@ export default function DatasetsPage() {
                       <Badge variant="outline">{ds.source_type}</Badge>
                     </TableCell>
                     <TableCell>{ds.format}</TableCell>
-                    <TableCell className="text-right font-mono">{ds.row_count.toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-mono">{formatBytes(ds.size_bytes)}</TableCell>
-                    <TableCell>
-                      {ds.tags && ds.tags.split(",").map((t) => (
-                        <Badge key={t} variant="secondary" className="mr-1">{t.trim()}</Badge>
-                      ))}
+                    <TableCell className="text-right font-mono">
+                      {ds.row_count.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right">v{ds.version}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatBytes(ds.size_bytes)}
+                    </TableCell>
+                    <TableCell>
+                      {ds.tags &&
+                        ds.tags.split(",").map((t) => (
+                          <Badge
+                            key={t}
+                            variant="secondary"
+                            className="mr-1"
+                          >
+                            {t.trim()}
+                          </Badge>
+                        ))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      v{ds.version}
+                    </TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button
                         variant="ghost"
@@ -161,7 +217,9 @@ export default function DatasetsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive"
-                        onClick={() => deleteMut.mutate(ds.id)}
+                        onClick={() =>
+                          setDeleteTarget({ id: ds.id, name: ds.name })
+                        }
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -181,7 +239,9 @@ export default function DatasetsPage() {
             <DialogTitle>Dataset Preview</DialogTitle>
           </DialogHeader>
           {preview.isLoading ? (
-            <p className="text-muted-foreground text-center py-8">Loading...</p>
+            <p className="text-muted-foreground text-center py-8">
+              Loading...
+            </p>
           ) : preview.data?.rows.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No rows</p>
           ) : (
@@ -208,10 +268,36 @@ export default function DatasetsPage() {
                 </TableBody>
               </Table>
               <p className="mt-2 text-xs text-muted-foreground">
-                Showing {preview.data?.rows.length} of {preview.data?.total} rows
+                Showing {preview.data?.rows.length} of {preview.data?.total}{" "}
+                rows
               </p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Dataset</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
