@@ -1,0 +1,25 @@
+{
+  "status": "completed",
+  "pipeline": "eval",
+  "total_count": null,
+  "processed_count": null,
+  "percent": null,
+  "stage": {
+    "name": "Running",
+    "label": "eval",
+    "current": 1,
+    "total": 1,
+    "status": "completed",
+    "children": [
+      {
+        "name": "Evaluating",
+        "label": "general_qa",
+        "current": 1,
+        "total": 1,
+        "status": "completed",
+        "children": []
+      }
+    ]
+  },
+  "updated_at": "2026-03-19T04:12:59.543492"
+}

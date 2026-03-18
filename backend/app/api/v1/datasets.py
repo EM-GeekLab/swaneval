@@ -11,6 +11,7 @@ from app.config import settings
 from app.models.dataset import Dataset, DatasetVersion, SourceType
 from app.models.user import User
 from app.schemas.dataset import DatasetMountRequest, DatasetResponse
+from app.services.dataset_deletion import cleanup_uploaded_file, delete_dataset_versions
 
 router = APIRouter()
 
@@ -189,5 +190,8 @@ async def delete_dataset(
     ds = await session.get(Dataset, dataset_id)
     if not ds:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+
+    await delete_dataset_versions(session, ds.id)
+    cleanup_uploaded_file(ds)
     await session.delete(ds)
     await session.commit()

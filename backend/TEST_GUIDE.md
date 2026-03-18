@@ -6,17 +6,17 @@
 
 EvalScope GUI 是一个企业级 LLM 评估平台，采用前后端分离架构：
 
-| 层级 | 技术 |
-|------|------|
-| 后端框架 | FastAPI + SQLModel |
-| 数据库 | PostgreSQL 14 (异步) + SQLAlchemy |
-| 任务队列 | 异步任务 (asyncio) |
-| 前端 | Next.js 14 + shadcn/ui |
-| 认证 | JWT (python-jose) |
+| 层级     | 技术                              |
+| -------- | --------------------------------- |
+| 后端框架 | FastAPI + SQLModel                |
+| 数据库   | PostgreSQL 14 (异步) + SQLAlchemy |
+| 任务队列 | 异步任务 (asyncio)                |
+| 前端     | Next.js 14 + shadcn/ui            |
+| 认证     | JWT (python-jose)                 |
 
 ### 1.2 核心功能模块
 
-```
+```text
 backend/app/
 ├── main.py              # FastAPI 应用入口
 ├── config.py            # 配置管理 (pydantic-settings)
@@ -57,12 +57,12 @@ backend/app/
 
 ### 2.2 内置评估器 (`app/services/evaluators.py`)
 
-| 评估器 | 说明 |
-|--------|------|
-| exact_match | 精确匹配，忽略首尾空白 |
-| contains | 判断期望输出是否包含在模型输出中 |
-| regex | 正则表达式匹配 |
-| numeric | 数值接近度判断（可配置容差） |
+| 评估器      | 说明                             |
+| ----------- | -------------------------------- |
+| exact_match | 精确匹配，忽略首尾空白           |
+| contains    | 判断期望输出是否包含在模型输出中 |
+| regex       | 正则表达式匹配                   |
+| numeric     | 数值接近度判断（可配置容差）     |
 
 ### 2.3 异步任务执行
 
@@ -91,6 +91,7 @@ dev = [
 ```
 
 然后运行：
+
 ```bash
 cd backend
 uv sync --group dev
@@ -729,7 +730,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
       - name: Install dependencies
         run: |
           pip install uv
@@ -755,48 +756,75 @@ pip install evalscope
 在 `app/services/task_runner.py` 中添加：
 
 ```python
-# 未来集成 evalscope SDK 的示例代码
-from evalscope import run_eval, ARGS
+# 未来集成 evalscope SDK (v1.x) 的示例代码
+import json
+from pathlib import Path
+
+from evalscope.config import TaskConfig
+from evalscope.run import run_task
+
+
+def build_task_config(task, model, datasets) -> TaskConfig:
+    """将本地任务配置映射为 evalscope TaskConfig。"""
+    params = json.loads(task.params_json or "{}")
+
+    # 当前后端以 source_uri 存储数据路径；这里示例使用 general_qa 作为统一入口。
+    # 实际项目中建议按数据类型（qa/mcq/fc）动态选择 datasets 与 dataset_args。
+    dataset_args = {
+        "general_qa": {
+            "dataset_id": datasets[0].source_uri,  # 例如 /path/to/example.jsonl
+            "subset_list": [Path(datasets[0].source_uri).stem],
+        }
+    }
+
+    task_cfg = TaskConfig(
+        model=model.name,
+        api_url=model.endpoint_url,
+        api_key=model.api_key,
+        eval_type="openai_api",
+        datasets=["general_qa"],
+        dataset_args=dataset_args,
+        generation_config={
+            "temperature": params.get("temperature", 0.7),
+            "max_tokens": params.get("max_tokens", 1024),
+            "top_p": params.get("top_p", 1.0),
+            "seed": params.get("seed", 42),
+        },
+        repeats=task.repeat_count,
+        enable_progress_tracker=True,
+    )
+    return task_cfg
+
 
 async def run_task_with_evalscope(task_id: uuid.UUID):
-    """使用 evalscope SDK 运行评估任务"""
+    """使用 evalscope SDK 运行评估任务（示例）。"""
+    async with AsyncSession(engine) as session:
+        task = await session.get(EvalTask, task_id)
+        if not task:
+            raise ValueError(f"Task {task_id} not found")
 
-    # 获取任务配置
-    task = await session.get(EvalTask, task_id)
-    model = await session.get(LLMModel, task.model_id)
+        model = await session.get(LLMModel, task.model_id)
+        if not model:
+            raise ValueError(f"Model {task.model_id} not found")
 
-    # 构建 evalscope 参数
-    args = ARGS(
-        model=model.name,
-        model_args={
-            "type": "chat",
-            "api_base": model.endpoint_url,
-            "api_key": model.api_key
-        },
-        datasets=[ds.source_path for ds in task.datasets],
-        eval=task.criteria_ids[0],  # 评估标准
-        # 其他参数...
-    )
+        dataset_ids = [uuid.UUID(x) for x in task.dataset_ids.split(",") if x]
+        datasets = [await session.get(Dataset, ds_id) for ds_id in dataset_ids]
+        datasets = [d for d in datasets if d is not None]
+        if not datasets:
+            raise ValueError("No valid datasets found")
 
-    # 运行评估
-    results = run_eval(args)
+        task_cfg = build_task_config(task, model, datasets)
 
-    # 保存结果到数据库
-    for result in results:
-        eval_result = EvalResult(
-            task_id=task.id,
-            dataset_id=result.dataset_id,
-            criterion_id=result.criterion_id,
-            prompt_text=result.prompt,
-            expected_output=result.expected,
-            model_output=result.output,
-            score=result.score,
-            latency_ms=result.latency,
-        )
-        session.add(eval_result)
-
-    await session.commit()
+        # 运行评测：evalscope 会在 work_dir 下输出 reports / reviews / progress.json 等文件。
+        # 建议后续实现 result ingestor，将 SDK 输出解析并写回 EvalResult。
+        run_task(task_cfg=task_cfg)
 ```
+
+### 6.3 注意事项（v1.x）
+
+1. `run_eval + ARGS` 为旧版本示例；推荐统一使用 `TaskConfig + run_task`。
+2. 当前后端数据库以 `criterion_id` 为核心维度，而 evalscope 输出是 `dataset/subset/metric` 维度，需增加结果映射层。
+3. 当前代码通过 `asyncio.create_task()` 在 API 进程内执行任务，接入 SDK 后建议迁移到独立 worker 进程。
 
 ---
 
@@ -812,6 +840,7 @@ async def run_task_with_evalscope(task_id: uuid.UUID):
 6. **未来集成**：evalscope SDK 的集成示例
 
 运行测试：
+
 ```bash
 cd backend
 pytest
