@@ -32,7 +32,7 @@ backend/
 2. Set environment variables:
 
    ```bash
-   export DATABASE_URL="postgresql://user:password@localhost:5432/evalscope"
+   export DATABASE_URL="postgresql://user:password@localhost:6001/evalscope"
    export REDIS_URL="redis://localhost:6379/0"
    export SECRET_KEY="your-secret-key"
    ```

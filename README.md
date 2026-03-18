@@ -42,11 +42,11 @@ uv pip install -r requirements.txt
 pip install -r requirements.txt
 
 # Set environment variables (for local development)
-export DATABASE_URL="postgresql://evalscope:evalscope@localhost:5432/evalscope"
+export DATABASE_URL="postgresql://evalscope:evalscope@localhost:6001/evalscope"
 export REDIS_URL="redis://localhost:6379/0"
 
 # Or if running backend IN DOCKER (not locally), use:
-# export DATABASE_URL="postgresql://evalscope:evalscope@postgres:5432/evalscope"
+# export DATABASE_URL="postgresql://evalscope:evalscope@postgres:6001/evalscope"
 # export REDIS_URL="redis://redis:6379/0"
 
 # Run database migrations
@@ -88,12 +88,12 @@ docker-compose down
 
 **Connection Strings (for local development):**
 
-- PostgreSQL: `postgresql://evalscope:evalscope@localhost:5432/evalscope`
+- PostgreSQL: `postgresql://evalscope:evalscope@localhost:6001/evalscope`
 - Redis: `redis://localhost:6379/0`
 
 **Connection Strings (for Docker/containerized backend):**
 
-- PostgreSQL: `postgresql://evalscope:evalscope@postgres:5432/evalscope`
+- PostgreSQL: `postgresql://evalscope:evalscope@postgres:6001/evalscope`
 - Redis: `redis://redis:6379/0`
 
 Then run backend and frontend locally (see Backend Setup and Frontend Setup above).

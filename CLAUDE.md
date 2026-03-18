@@ -98,7 +98,7 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 
 # Set environment variables
-export DATABASE_URL="postgresql://user:password@localhost:5432/evalscope"
+export DATABASE_URL="postgresql://user:password@localhost:6001/evalscope"
 export REDIS_URL="redis://localhost:6379/0"
 
 # Run database migrations
