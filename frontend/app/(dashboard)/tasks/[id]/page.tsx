@@ -13,13 +13,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Pause, Play, XCircle, AlertTriangle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Pause, Play, XCircle, AlertTriangle, Trash2 } from "lucide-react";
+import { useState } from "react";
 import {
   useTask,
   useSubtasks,
   usePauseTask,
   useResumeTask,
   useCancelTask,
+  useDeleteTask,
 } from "@/lib/hooks/use-tasks";
 import { useTaskSummary, useErrorResults } from "@/lib/hooks/use-results";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -57,6 +67,9 @@ export default function TaskDetailPage() {
   const pause = usePauseTask();
   const resumeTask = useResumeTask();
   const cancel = useCancelTask();
+  const deleteTask = useDeleteTask();
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   if (isLoading || !task) {
     return (
@@ -133,6 +146,14 @@ export default function TaskDetailPage() {
             <XCircle className="mr-1 h-3.5 w-3.5" /> 取消
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-destructive hover:text-destructive hover:bg-destructive/5"
+          onClick={() => setShowDelete(true)}
+        >
+          <Trash2 className="mr-1 h-3.5 w-3.5" /> 删除
+        </Button>
       </div>
 
       {/* Failed task alert */}
@@ -346,6 +367,46 @@ export default function TaskDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete confirmation */}
+      <Dialog open={showDelete} onOpenChange={() => { setShowDelete(false); setDeleteError(""); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除任务</DialogTitle>
+            <DialogDescription>
+              确定要删除 &quot;{task.name}&quot; 吗？相关的子任务和评测结果也将被删除，此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive px-1">{deleteError}</p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setShowDelete(false); setDeleteError(""); }}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                setDeleteError("");
+                try {
+                  await deleteTask.mutateAsync(id);
+                  router.push("/tasks");
+                } catch (err: unknown) {
+                  const detail =
+                    err && typeof err === "object" && "response" in err
+                      ? (err as { response?: { data?: { detail?: string } } }).response
+                          ?.data?.detail
+                      : undefined;
+                  setDeleteError(detail || "删除失败");
+                }
+              }}
+              disabled={deleteTask.isPending}
+            >
+              {deleteTask.isPending ? "删除中..." : "删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

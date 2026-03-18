@@ -9,6 +9,7 @@ import {
   Cpu,
   PlayCircle,
   BarChart3,
+  Ruler,
   LogOut,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/auth";
@@ -18,6 +19,7 @@ const nav = [
   { href: "/", label: "概览", icon: LayoutDashboard },
   { href: "/models", label: "模型", icon: Cpu },
   { href: "/datasets", label: "数据集", icon: Database },
+  { href: "/criteria", label: "评估标准", icon: Ruler },
   { href: "/tasks", label: "评测任务", icon: PlayCircle },
   { href: "/results", label: "结果分析", icon: BarChart3 },
 ];
