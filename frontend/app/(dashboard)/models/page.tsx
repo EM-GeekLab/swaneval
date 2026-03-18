@@ -267,9 +267,28 @@ export default function ModelsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header with inline stats */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">模型管理</h1>
+        <div className="flex items-center gap-5">
+          <h1 className="text-lg font-semibold">模型管理</h1>
+          <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
+            <span>
+              共{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {models.length}
+              </span>{" "}
+              个模型
+            </span>
+            {Object.entries(typeCounts).map(([type, count]) => (
+              <span key={type}>
+                {typeLabel[type] ?? type}{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {count}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
         <Button
           size="sm"
           onClick={() => setShowForm(!showForm)}
@@ -344,8 +363,8 @@ export default function ModelsPage() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                <div className="space-y-1 lg:col-span-1">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1 col-span-2">
                   <Label className="text-xs">端点 URL *</Label>
                   <Input
                     value={form.endpoint_url}
@@ -368,28 +387,26 @@ export default function ModelsPage() {
                     placeholder="sk-..."
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">最大 Token</Label>
-                    <Input
-                      type="number"
-                      value={form.max_tokens}
-                      onChange={(e) =>
-                        setForm({ ...form, max_tokens: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">描述</Label>
-                    <Input
-                      value={form.description}
-                      onChange={(e) =>
-                        setForm({ ...form, description: e.target.value })
-                      }
-                      placeholder="备注"
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">最大 Token</Label>
+                  <Input
+                    type="number"
+                    value={form.max_tokens}
+                    onChange={(e) =>
+                      setForm({ ...form, max_tokens: e.target.value })
+                    }
+                  />
                 </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">描述</Label>
+                <Input
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  placeholder="模型配置备注..."
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button
@@ -411,25 +428,25 @@ export default function ModelsPage() {
 
       {/* Search + filter bar */}
       <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="搜索模型..."
-            className="pl-8 h-8"
+            placeholder="搜索模型名称、提供商、端点..."
+            className="pl-9 h-9 rounded-full bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-input"
           />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 rounded-full bg-muted/50 p-1">
           <button
             onClick={() => setTypeFilter("__all__")}
-            className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+            className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
               typeFilter === "__all__"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-accent"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            全部 {models.length}
+            全部
           </button>
           {Object.entries(typeCounts).map(([type, count]) => (
             <button
@@ -437,13 +454,14 @@ export default function ModelsPage() {
               onClick={() =>
                 setTypeFilter(typeFilter === type ? "__all__" : type)
               }
-              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                 typeFilter === type
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {typeLabel[type] ?? type} {count}
+              {typeLabel[type] ?? type}
+              <span className="ml-1 tabular-nums opacity-60">{count}</span>
             </button>
           ))}
         </div>
