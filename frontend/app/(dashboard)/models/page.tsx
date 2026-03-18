@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -306,121 +305,149 @@ export default function ModelsPage() {
         </Button>
       </div>
 
-      {/* Inline creation form */}
+      {/* Inline creation form — table-style rows */}
       {showForm && (
         <Card>
-          <CardContent className="pt-5">
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">显示名称 *</Label>
-                  <Input
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm({ ...form, name: e.target.value })
-                    }
-                    placeholder="GPT-4o"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">提供商 *</Label>
-                  <Input
-                    value={form.provider}
-                    onChange={(e) =>
-                      setForm({ ...form, provider: e.target.value })
-                    }
-                    placeholder="openai"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">模型 ID</Label>
-                  <Input
-                    value={form.model_name}
-                    onChange={(e) =>
-                      setForm({ ...form, model_name: e.target.value })
-                    }
-                    placeholder="gpt-4o-2024-08-06"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">类型</Label>
-                  <Select
-                    value={form.model_type}
-                    onValueChange={(v) =>
-                      setForm({ ...form, model_type: v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="api">API</SelectItem>
-                      <SelectItem value="local">本地</SelectItem>
-                      <SelectItem value="huggingface">HuggingFace</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1 col-span-2">
-                  <Label className="text-xs">端点 URL *</Label>
-                  <Input
-                    value={form.endpoint_url}
-                    onChange={(e) =>
-                      setForm({ ...form, endpoint_url: e.target.value })
-                    }
-                    placeholder="https://api.openai.com/v1/chat/completions"
-                    className="font-mono"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">API 密钥</Label>
-                  <Input
-                    type="password"
-                    value={form.api_key}
-                    onChange={(e) =>
-                      setForm({ ...form, api_key: e.target.value })
-                    }
-                    placeholder="sk-..."
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">最大 Token</Label>
-                  <Input
-                    type="number"
-                    value={form.max_tokens}
-                    onChange={(e) =>
-                      setForm({ ...form, max_tokens: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">描述</Label>
-                <Input
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  placeholder="模型配置备注..."
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetForm}
-                >
-                  取消
-                </Button>
-                <Button type="submit" size="sm" disabled={create.isPending}>
-                  {create.isPending ? "添加中..." : "添加模型"}
-                </Button>
-              </div>
+          <CardContent className="p-0">
+            <form onSubmit={handleCreate}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>显示名称 *</TableHead>
+                    <TableHead>提供商 *</TableHead>
+                    <TableHead>模型 ID</TableHead>
+                    <TableHead>类型</TableHead>
+                    <TableHead>端点 URL *</TableHead>
+                    <TableHead>API 密钥</TableHead>
+                    <TableHead>Token</TableHead>
+                    <TableHead className="w-20" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell className="py-2">
+                      <Input
+                        value={form.name}
+                        onChange={(e) =>
+                          setForm({ ...form, name: e.target.value })
+                        }
+                        placeholder="GPT-4o"
+                        className="h-8"
+                        required
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        value={form.provider}
+                        onChange={(e) =>
+                          setForm({ ...form, provider: e.target.value })
+                        }
+                        placeholder="openai"
+                        className="h-8"
+                        required
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        value={form.model_name}
+                        onChange={(e) =>
+                          setForm({ ...form, model_name: e.target.value })
+                        }
+                        placeholder="gpt-4o-2024-08-06"
+                        className="h-8 font-mono"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Select
+                        value={form.model_type}
+                        onValueChange={(v) =>
+                          setForm({ ...form, model_type: v })
+                        }
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="api">API</SelectItem>
+                          <SelectItem value="local">本地</SelectItem>
+                          <SelectItem value="huggingface">HuggingFace</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        value={form.endpoint_url}
+                        onChange={(e) =>
+                          setForm({ ...form, endpoint_url: e.target.value })
+                        }
+                        placeholder="https://..."
+                        className="h-8 font-mono"
+                        required
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        type="password"
+                        value={form.api_key}
+                        onChange={(e) =>
+                          setForm({ ...form, api_key: e.target.value })
+                        }
+                        placeholder="sk-..."
+                        className="h-8"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        type="number"
+                        value={form.max_tokens}
+                        onChange={(e) =>
+                          setForm({ ...form, max_tokens: e.target.value })
+                        }
+                        className="h-8 w-20"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <div className="flex gap-1">
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="h-8"
+                          disabled={create.isPending}
+                        >
+                          {create.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8"
+                          onClick={resetForm}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {form.description || true ? (
+                    <TableRow className="hover:bg-transparent border-t-0">
+                      <TableCell colSpan={8} className="py-1.5 pt-0">
+                        <Input
+                          value={form.description}
+                          onChange={(e) =>
+                            setForm({ ...form, description: e.target.value })
+                          }
+                          placeholder="描述（可选）"
+                          className="h-7 border-dashed text-xs"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
             </form>
           </CardContent>
         </Card>
@@ -434,34 +461,36 @@ export default function ModelsPage() {
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder="搜索模型名称、提供商、端点..."
-            className="pl-9 h-9 rounded-full bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-input"
+            className="pl-9 h-9 border-border"
           />
         </div>
-        <div className="flex items-center gap-1.5 rounded-full bg-muted/50 p-1">
+        <div className="flex items-center border rounded-md overflow-hidden">
           <button
             onClick={() => setTypeFilter("__all__")}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-r ${
               typeFilter === "__all__"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             全部
           </button>
-          {Object.entries(typeCounts).map(([type, count]) => (
+          {Object.entries(typeCounts).map(([type, count], i) => (
             <button
               key={type}
               onClick={() =>
                 setTypeFilter(typeFilter === type ? "__all__" : type)
               }
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                i < Object.keys(typeCounts).length - 1 ? "border-r" : ""
+              } ${
                 typeFilter === type
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {typeLabel[type] ?? type}
-              <span className="ml-1 tabular-nums opacity-60">{count}</span>
+              <span className="ml-1 tabular-nums opacity-70">{count}</span>
             </button>
           ))}
         </div>
