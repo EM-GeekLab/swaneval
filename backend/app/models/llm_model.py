@@ -42,6 +42,15 @@ class LLMModel(SQLModel, table=True):
     model_type: ModelType = Field(sa_column=Column(SAEnum(ModelType), nullable=False))
     # 模型类型 / Model type (api/local/huggingface)
 
+    description: str = Field(default="")
+    # 模型描述 / Human-readable model description
+
+    model_name: str = Field(default="")
+    # 实际调用模型名 / Upstream provider model name
+
+    max_tokens: int | None = Field(default=None)
+    # 模型 token 上限 / Optional model token limit
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     # 创建时间 / Creation timestamp
 

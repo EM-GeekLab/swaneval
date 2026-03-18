@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "data/uploads"
     # 上传文件目录 / Upload directory for dataset files
 
+    DEFAULT_MODEL_PROVIDER: str = ""
+    # 默认模型提供商 / Optional default provider injected by environment
+
+    DEFAULT_MODEL_ENDPOINT_URL: str = ""
+    # 默认模型地址 / Optional default endpoint URL injected by environment
+
+    DEFAULT_MODEL_NAME: str = ""
+    # 默认模型名 / Optional default model name injected by environment
+
+    DEFAULT_MODEL_API_KEY: str = ""
+    # 默认 API Key / Optional default API key injected by environment
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -12,12 +12,18 @@ class LLMModelCreate(BaseModel):
     endpoint_url: str
     api_key: str = ""
     model_type: ModelType
+    description: str = ""
+    model_name: str = ""
+    max_tokens: int | None = None
 
 
 class LLMModelUpdate(BaseModel):
     name: str | None = None
     endpoint_url: str | None = None
     api_key: str | None = None
+    description: str | None = None
+    model_name: str | None = None
+    max_tokens: int | None = None
 
 
 class LLMModelResponse(BaseModel):
@@ -26,4 +32,12 @@ class LLMModelResponse(BaseModel):
     provider: str
     endpoint_url: str
     model_type: ModelType
+    description: str
+    model_name: str
+    max_tokens: int | None
     created_at: datetime
+
+
+class ModelTestResponse(BaseModel):
+    ok: bool
+    message: str
