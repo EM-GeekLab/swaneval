@@ -1,14 +1,22 @@
 import uuid
+from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.config import settings
 from app.models.llm_model import LLMModel
 from app.models.user import User
-from app.schemas.model import LLMModelCreate, LLMModelResponse, LLMModelUpdate
+from app.schemas.model import (
+    LLMModelCreate,
+    LLMModelResponse,
+    LLMModelUpdate,
+    ModelTestResponse,
+)
+from app.services.model_connectivity import test_model_connectivity
 
 router = APIRouter()
 
@@ -25,6 +33,9 @@ async def create_model(
         endpoint_url=body.endpoint_url,
         api_key=body.api_key,
         model_type=body.model_type,
+        description=body.description,
+        model_name=body.model_name,
+        max_tokens=body.max_tokens,
     )
     session.add(m)
     await session.commit()
@@ -37,7 +48,7 @@ async def list_models(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    stmt = select(LLMModel).order_by(LLMModel.created_at.desc())
+    stmt = select(LLMModel).order_by(col(LLMModel.created_at).desc())
     result = await session.exec(stmt)
     return result.all()
 
@@ -70,14 +81,22 @@ async def update_model(
         m.endpoint_url = body.endpoint_url
     if body.api_key is not None:
         m.api_key = body.api_key
+    if body.description is not None:
+        m.description = body.description
+    if body.model_name is not None:
+        m.model_name = body.model_name
+    if body.max_tokens is not None:
+        m.max_tokens = body.max_tokens
+
+    m.updated_at = datetime.utcnow()
     session.add(m)
     await session.commit()
     await session.refresh(m)
     return m
 
 
-@router.post("/{model_id}/test")
-async def test_model_endpoint(
+@router.post("/{model_id}/test", response_model=ModelTestResponse)
+async def test_model(
     model_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -85,27 +104,16 @@ async def test_model_endpoint(
     m = await session.get(LLMModel, model_id)
     if not m:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Model not found")
-    try:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if m.api_key:
-            headers["Authorization"] = f"Bearer {m.api_key}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                m.endpoint_url,
-                headers=headers,
-                json={
-                    "model": m.name,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 1,
-                },
-            )
-        if resp.status_code < 400:
-            return {"ok": True, "message": f"Connected ({resp.status_code})"}
-        return {"ok": False, "message": f"HTTP {resp.status_code}"}
-    except httpx.TimeoutException:
-        return {"ok": False, "message": "Connection timed out"}
-    except Exception as e:
-        return {"ok": False, "message": str(e)[:200]}
+
+    model_name = m.model_name or m.name or settings.DEFAULT_MODEL_NAME
+    endpoint_url = m.endpoint_url or settings.DEFAULT_MODEL_ENDPOINT_URL
+    api_key = m.api_key or settings.DEFAULT_MODEL_API_KEY
+    ok, message = await test_model_connectivity(
+        endpoint_url=endpoint_url,
+        api_key=api_key,
+        model_name=model_name,
+    )
+    return ModelTestResponse(ok=ok, message=message)
 
 
 @router.delete("/{model_id}", status_code=204)
