@@ -10,6 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.config import settings
 from app.models.dataset import Dataset, DatasetVersion, SourceType
+from app.models.eval_result import EvalResult
 from app.models.user import User
 from app.schemas.dataset import DatasetMountRequest, DatasetResponse
 from app.services.dataset_deletion import cleanup_uploaded_file, delete_dataset_versions
@@ -192,14 +193,13 @@ async def delete_dataset(
     if not ds:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
 
+    # Delete eval_results referencing this dataset
+    stmt = select(EvalResult).where(EvalResult.dataset_id == dataset_id)
+    results = (await session.exec(stmt)).all()
+    for r in results:
+        await session.delete(r)
+
     await delete_dataset_versions(session, ds.id)
     cleanup_uploaded_file(ds)
-    try:
-        await session.delete(ds)
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "无法删除：该数据集仍被评测任务或结果引用，请先删除相关任务。",
-        )
+    await session.delete(ds)
+    await session.commit()

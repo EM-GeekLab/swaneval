@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.criterion import Criterion
+from app.models.eval_result import EvalResult
 from app.models.user import User
 from app.schemas.criterion import (
     CriterionCreate,
@@ -88,15 +89,15 @@ async def delete_criterion(
     c = await session.get(Criterion, criterion_id)
     if not c:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Criterion not found")
-    try:
-        await session.delete(c)
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "无法删除：该评估标准仍被评测任务或结果引用，请先删除相关任务。",
-        )
+
+    # Delete eval_results referencing this criterion
+    stmt = select(EvalResult).where(EvalResult.criterion_id == criterion_id)
+    results = (await session.exec(stmt)).all()
+    for r in results:
+        await session.delete(r)
+
+    await session.delete(c)
+    await session.commit()
 
 
 @router.post("/test")
