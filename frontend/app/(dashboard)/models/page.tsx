@@ -407,7 +407,7 @@ export default function ModelsPage() {
           size="sm"
           onClick={isCreating ? closePanel : openCreate}
           variant={isCreating ? "destructive" : "default"}
-          className={`${isCreating ? "relative z-50" : ""} ${shakeCancel ? "animate-shake" : ""}`}
+          className={`${isCreating ? "relative z-[60]" : ""} ${shakeCancel ? "animate-shake" : ""}`}
           onAnimationEnd={() => setShakeCancel(false)}
         >
           {isCreating ? (
@@ -785,14 +785,14 @@ export default function ModelsPage() {
       {isCreating && createPos && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 z-40 animate-backdrop-in"
+            className="fixed inset-0 bg-black/40 z-50 animate-backdrop-in"
             onClick={() => {
               if (formDirty) { setShakeCancel(true); return; }
               closePanel();
             }}
           />
           <div
-            className="fixed z-50 animate-modal-expand"
+            className="fixed z-[60] animate-modal-expand"
             style={{
               top: createPos.top,
               right: createPos.right,

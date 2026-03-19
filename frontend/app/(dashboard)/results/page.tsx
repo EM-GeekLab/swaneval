@@ -57,6 +57,8 @@ import {
   BarChart3,
   Hexagon,
   List,
+  Cpu,
+  Ruler,
 } from "lucide-react";
 import {
   BarChart,
@@ -482,30 +484,7 @@ export default function ResultsPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-5">
-          <h1 className="text-lg font-semibold">结果分析</h1>
-          <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
-            <span>
-              共{" "}
-              <span className="font-semibold text-foreground tabular-nums">
-                {leaderboard.length}
-              </span>{" "}
-              条记录
-            </span>
-            <span>
-              <span className="font-semibold text-foreground tabular-nums">
-                {uniqueModels}
-              </span>{" "}
-              个模型
-            </span>
-            <span>
-              <span className="font-semibold text-foreground tabular-nums">
-                {uniqueCriteria}
-              </span>{" "}
-              个标准
-            </span>
-          </div>
-        </div>
+        <h1 className="text-lg font-semibold">结果分析</h1>
         <Button
           size="sm"
           variant="outline"
@@ -514,6 +493,28 @@ export default function ResultsPage() {
         >
           <Download className="mr-1 h-4 w-4" /> 导出 CSV
         </Button>
+      </div>
+
+      {/* Summary metric cards */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: "评测记录", value: leaderboard.length, icon: Medal },
+          { label: "模型数", value: uniqueModels, icon: Cpu },
+          { label: "评测标准", value: uniqueCriteria, icon: Ruler },
+          { label: "外部基准", value: benchmarks.length, icon: Globe },
+        ].map((m) => (
+          <Card key={m.label}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="rounded-md bg-muted p-2">
+                <m.icon className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{m.value}</p>
+                <p className="text-[11px] text-muted-foreground">{m.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Toolbar: criterion filter segmented tabs */}
