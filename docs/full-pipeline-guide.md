@@ -77,8 +77,8 @@ uv run uvicorn app.main:app --reload --port 8000
 
 # 前端（新终端）
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ---

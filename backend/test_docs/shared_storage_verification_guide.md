@@ -82,7 +82,7 @@ uv sync
 
 ```bash
 cd frontend
-npm install
+pnpm install
 ```
 
 ---
@@ -138,7 +138,7 @@ uv run ruff check \
 
 ```bash
 cd frontend
-npm run build
+pnpm build
 ```
 
 预期：build 成功，无 TypeScript 错误。前端代码本次无改动，此步骤仅确认未引入破坏。

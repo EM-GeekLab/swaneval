@@ -54,7 +54,7 @@ BACKEND_PORT=18000 FRONTEND_PORT=13000 PG_PORT=15432 docker compose up --build -
 
 本地开发模式下，仅容器化数据库和缓存，前后端在宿主机运行以获得热重载体验。
 
-**前置要求：** Python 3.10+、Node.js 18+、Docker
+**前置要求：** Python 3.10+、Node.js 24+、pnpm 10+、Docker
 
 #### 1. 启动基础设施
 
@@ -77,8 +77,8 @@ uv run uvicorn app.main:app --reload --port 8000
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 修改前端代码后页面会自动刷新。

@@ -25,8 +25,8 @@ uv run uvicorn app.main:app --reload --port 8000
 
 # Frontend
 cd frontend
-npm install
-npm run dev  # localhost:3000
+pnpm install
+pnpm dev  # localhost:3000
 ```
 
 **Env vars** (backend `.env`):
@@ -274,7 +274,7 @@ Resource-level permissions (datasets, reports): check `permissions` table for `(
 
 After building each module, verify:
 1. `uv run ruff check backend/` — no lint errors
-2. `cd frontend && npm run build` — no TypeScript errors
+2. `cd frontend && pnpm build` — no TypeScript errors
 3. `uv run alembic upgrade head` — migrations apply cleanly
 4. Manual test: create resource via API → appears in frontend list → detail page loads
 5. Permission check: viewer cannot access admin routes (expect 403)
