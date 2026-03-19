@@ -34,11 +34,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Download,
   ArrowUpDown,
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Plus,
+  Trophy,
+  Globe,
+  Trash2,
+  Crown,
 } from "lucide-react";
 import {
   BarChart,
@@ -56,6 +68,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useLeaderboard, useResults } from "@/lib/hooks/use-results";
+import { useBenchmarks, useCreateBenchmarkBatch, useDeleteBenchmark } from "@/lib/hooks/use-benchmarks";
 import { useCriteria } from "@/lib/hooks/use-criteria";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import type { LeaderboardEntry, EvalResult } from "@/lib/types";
@@ -102,9 +115,15 @@ function exportCSV(data: LeaderboardEntry[]) {
 export default function ResultsPage() {
   const { data: criteria = [] } = useCriteria();
   const { data: tasks = [] } = useTasks();
+  const { data: benchmarks = [] } = useBenchmarks();
+  const createBenchmarkBatch = useCreateBenchmarkBatch();
+  const deleteBenchmark = useDeleteBenchmark();
 
   const [criterionFilter, setCriterionFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importJson, setImportJson] = useState("");
+  const [importError, setImportError] = useState("");
 
   // Detail tab state
   const [detailTaskId, setDetailTaskId] = useState<string>("");
@@ -177,6 +196,98 @@ export default function ResultsPage() {
     for (const entry of leaderboard) names.add(entry.criterion_name);
     return Array.from(names);
   }, [leaderboard]);
+
+  // ── Champion leaderboard: best model per criterion (local + external) ──
+  type ChampionEntry = {
+    criterion: string;
+    champion: string;
+    score: number;
+    source: "local" | "external";
+    provider?: string;
+  };
+  const championData = useMemo<ChampionEntry[]>(() => {
+    const map = new Map<string, ChampionEntry>();
+    // Local results
+    for (const entry of leaderboard) {
+      const key = entry.criterion_name;
+      const existing = map.get(key);
+      if (!existing || entry.avg_score > existing.score) {
+        map.set(key, {
+          criterion: key,
+          champion: entry.model_name,
+          score: entry.avg_score,
+          source: "local",
+        });
+      }
+    }
+    // External benchmarks — match by benchmark_name ≈ criterion_name
+    for (const b of benchmarks) {
+      const key = b.benchmark_name;
+      const existing = map.get(key);
+      if (!existing || b.score > existing.score) {
+        map.set(key, {
+          criterion: key,
+          champion: b.model_name,
+          score: b.score,
+          source: "external",
+          provider: b.provider,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.score - a.score);
+  }, [leaderboard, benchmarks]);
+
+  // ── Merged leaderboard: local results + external benchmarks ──
+  const mergedLeaderboard = useMemo(() => {
+    const merged: Array<LeaderboardEntry & { source: "local" | "external" }> = [];
+    for (const e of leaderboard) {
+      merged.push({ ...e, source: "local" as const });
+    }
+    for (const b of benchmarks) {
+      if (criterionFilter !== "__all__") {
+        // skip external if criterion filter is active and doesn't match
+        const crit = criteria.find((c) => c.id === criterionFilter);
+        if (crit && crit.name !== b.benchmark_name) continue;
+      }
+      merged.push({
+        model_id: `ext-${b.id}`,
+        model_name: `${b.model_name}${b.provider ? ` (${b.provider})` : ""}`,
+        criterion_id: `ext-${b.benchmark_name}`,
+        criterion_name: b.benchmark_name,
+        avg_score: b.score,
+        total_prompts: 0,
+        avg_latency_ms: 0,
+        source: "external" as const,
+      });
+    }
+    return merged.sort((a, b) => b.avg_score - a.avg_score);
+  }, [leaderboard, benchmarks, criterionFilter, criteria]);
+
+  const handleImportBenchmarks = async () => {
+    setImportError("");
+    try {
+      const data = JSON.parse(importJson);
+      const items = Array.isArray(data) ? data : [data];
+      const mapped = items.map((item: Record<string, unknown>) => ({
+        model_name: String(item.model_name || item.model || ""),
+        provider: String(item.provider || ""),
+        benchmark_name: String(item.benchmark_name || item.benchmark || item.criterion || ""),
+        score: Number(item.score ?? item.avg_score ?? 0),
+        score_display: String(item.score_display || ""),
+        source_url: String(item.source_url || item.url || ""),
+        source_platform: String(item.source_platform || item.platform || ""),
+      }));
+      if (mapped.some((m: { model_name: string; benchmark_name: string }) => !m.model_name || !m.benchmark_name)) {
+        setImportError("每条数据需要 model_name 和 benchmark_name 字段");
+        return;
+      }
+      await createBenchmarkBatch.mutateAsync(mapped);
+      setImportJson("");
+      setImportOpen(false);
+    } catch {
+      setImportError("JSON 解析失败，请检查格式");
+    }
+  };
 
   // ── Leaderboard table columns ──
   const lbColumns = useMemo<ColumnDef<LeaderboardEntry>[]>(
@@ -283,7 +394,7 @@ export default function ResultsPage() {
   );
 
   const lbTable = useReactTable({
-    data: leaderboard,
+    data: mergedLeaderboard,
     columns: lbColumns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -422,12 +533,18 @@ export default function ResultsPage() {
         </div>
       </div>
 
-      {/* Tabs: 排行榜 / 对比 / 雷达图 / 明细 */}
+      {/* Tabs */}
       <Tabs defaultValue="leaderboard">
         <TabsList>
           <TabsTrigger value="leaderboard">排行榜</TabsTrigger>
+          <TabsTrigger value="champion">
+            <Trophy className="mr-1 h-3.5 w-3.5" /> 天梯榜
+          </TabsTrigger>
           <TabsTrigger value="compare">对比</TabsTrigger>
           <TabsTrigger value="radar">雷达图</TabsTrigger>
+          <TabsTrigger value="external">
+            <Globe className="mr-1 h-3.5 w-3.5" /> 外部数据
+          </TabsTrigger>
           <TabsTrigger value="detail">明细</TabsTrigger>
         </TabsList>
 
@@ -555,6 +672,116 @@ export default function ResultsPage() {
           </Card>
         </TabsContent>
 
+        {/* ── 天梯榜 (Champion per criterion) ── */}
+        <TabsContent value="champion">
+          <Card>
+            <CardContent className="pt-6">
+              {championData.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground text-sm">
+                  暂无评测结果
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {championData.map((entry) => (
+                    <div
+                      key={entry.criterion}
+                      className="flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Crown className="h-4 w-4 text-amber-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{entry.criterion}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.source === "external" ? (
+                              <Badge variant="outline" className="text-[10px] font-normal mr-1">外部</Badge>
+                            ) : null}
+                            {entry.champion}
+                            {entry.provider ? ` · ${entry.provider}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`font-mono font-bold text-lg ${scoreColor(entry.score)}`}>
+                        {(entry.score * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── 外部数据 ── */}
+        <TabsContent value="external">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold">外部基准测试数据</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    导入闭源模型（GPT、Claude、Gemini 等）的公开评测数据，与本地模型对比
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => setImportOpen(true)}>
+                  <Plus className="mr-1 h-4 w-4" /> 导入数据
+                </Button>
+              </div>
+
+              {benchmarks.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm space-y-3">
+                  <Globe className="h-8 w-8 mx-auto text-muted-foreground/30" />
+                  <p>暂无外部基准数据</p>
+                  <p className="text-xs">
+                    点击「导入数据」粘贴 JSON 格式的评测数据
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>模型</TableHead>
+                      <TableHead>提供商</TableHead>
+                      <TableHead>基准测试</TableHead>
+                      <TableHead>得分</TableHead>
+                      <TableHead>来源</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {benchmarks.map((b) => (
+                      <TableRow key={b.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">{b.model_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{b.provider || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-normal">{b.benchmark_name}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`font-mono font-medium ${scoreColor(b.score)}`}>
+                            {b.score_display || `${(b.score * 100).toFixed(1)}%`}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {b.source_platform || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => deleteBenchmark.mutate(b.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ── 明细 ── */}
         <TabsContent value="detail">
           <Card>
@@ -661,6 +888,41 @@ export default function ResultsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Import benchmark dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>导入外部评测数据</DialogTitle>
+            <DialogDescription>
+              粘贴 JSON 数组，每条数据需包含 model_name、benchmark_name、score 字段
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+              placeholder={`[\n  {\n    "model_name": "GPT-4o",\n    "provider": "OpenAI",\n    "benchmark_name": "MMLU",\n    "score": 0.887,\n    "source_platform": "Open LLM Leaderboard"\n  }\n]`}
+              className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {importError && (
+              <p className="text-xs text-destructive">{importError}</p>
+            )}
+            <Button
+              className="w-full"
+              onClick={handleImportBenchmarks}
+              disabled={!importJson.trim() || createBenchmarkBatch.isPending}
+            >
+              {createBenchmarkBatch.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
+              {createBenchmarkBatch.isPending ? "导入中..." : "导入"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

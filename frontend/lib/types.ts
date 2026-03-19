@@ -105,6 +105,18 @@ export interface LeaderboardEntry {
   avg_latency_ms: number;
 }
 
+export interface ExternalBenchmark {
+  id: string;
+  model_name: string;
+  provider: string;
+  benchmark_name: string;
+  score: number;
+  score_display: string;
+  source_url: string;
+  source_platform: string;
+  notes: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
