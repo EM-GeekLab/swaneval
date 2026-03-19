@@ -219,10 +219,13 @@ export default function TasksPage() {
     () => [
       {
         id: "select",
+        size: 32,
+        enableSorting: false,
+        enableResizing: false,
         header: ({ table }) => (
           <input
             type="checkbox"
-            className="rounded border-input"
+            className="h-3.5 w-3.5 rounded border-input accent-primary"
             checked={table.getIsAllPageRowsSelected()}
             onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
           />
@@ -230,7 +233,7 @@ export default function TasksPage() {
         cell: ({ row }) => (
           <input
             type="checkbox"
-            className="rounded border-input"
+            className="h-3.5 w-3.5 rounded border-input accent-primary"
             checked={row.getIsSelected()}
             onChange={(e) => {
               e.stopPropagation();
@@ -239,7 +242,6 @@ export default function TasksPage() {
             onClick={(e) => e.stopPropagation()}
           />
         ),
-        enableSorting: false,
       },
       {
         accessorKey: "name",

@@ -51,7 +51,6 @@ import {
   Pencil,
   Copy,
   Check,
-  ClipboardPaste,
 } from "lucide-react";
 import {
   useModels,
@@ -246,10 +245,13 @@ export default function ModelsPage() {
     () => [
       {
         id: "select",
+        size: 32,
+        enableSorting: false,
+        enableResizing: false,
         header: ({ table }) => (
           <input
             type="checkbox"
-            className="rounded border-input"
+            className="h-3.5 w-3.5 rounded border-input accent-primary"
             checked={table.getIsAllPageRowsSelected()}
             onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
           />
@@ -257,7 +259,7 @@ export default function ModelsPage() {
         cell: ({ row }) => (
           <input
             type="checkbox"
-            className="rounded border-input"
+            className="h-3.5 w-3.5 rounded border-input accent-primary"
             checked={row.getIsSelected()}
             onChange={(e) => {
               e.stopPropagation();
@@ -266,7 +268,6 @@ export default function ModelsPage() {
             onClick={(e) => e.stopPropagation()}
           />
         ),
-        enableSorting: false,
       },
       {
         accessorKey: "name",
@@ -639,19 +640,16 @@ export default function ModelsPage() {
               {/* Create mode */}
               {isCreating && (
                 <CardContent className="pt-0">
-                  {/* Import actions */}
-                  <div className="grid grid-cols-2 gap-1.5 mb-3">
-                    <Button
+                  <div className="flex items-center justify-center gap-2 mb-3 text-xs text-muted-foreground">
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs w-full text-muted-foreground"
+                      className="hover:text-foreground transition-colors"
                       onClick={importFromClipboard}
                     >
-                      <ClipboardPaste className="mr-1.5 h-3 w-3" />
                       从剪贴板导入
-                    </Button>
-                    <label className="flex-1">
+                    </button>
+                    <span className="text-border">|</span>
+                    <label className="hover:text-foreground transition-colors cursor-pointer">
                       <input
                         type="file"
                         accept=".json"
@@ -666,16 +664,12 @@ export default function ModelsPage() {
                           e.target.value = "";
                         }}
                       />
-                      <span className="inline-flex items-center justify-center h-7 text-xs px-3 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors w-full">
-                        从 JSON 导入配置
-                      </span>
+                      从 JSON 导入
                     </label>
+                    {importError && (
+                      <span className="text-destructive">{importError}</span>
+                    )}
                   </div>
-                  {importError && (
-                    <p className="text-xs text-destructive mb-2">
-                      {importError}
-                    </p>
-                  )}
 
                   <form onSubmit={handleCreate} className="space-y-3">
                     <PanelField label="显示名称" required>
