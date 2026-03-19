@@ -1,3 +1,7 @@
+# 所有宿主机端口可通过环境变量覆盖，避免端口冲突。
+# 示例：BACKEND_PORT=18000 FRONTEND_PORT=13000 docker compose up --build -d
+# 或在 .env 文件中设置。
+
 services:
   # ── 基础设施 ──
 
@@ -37,18 +41,16 @@ services:
       dockerfile: Dockerfile
     container_name: evalscope-backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - evalscope_data:/data
     environment:
       DATABASE_URL: "postgresql+asyncpg://evalscope:evalscope@postgres:5432/evalscope"
       DATABASE_URL_SYNC: "postgresql://evalscope:evalscope@postgres:5432/evalscope"
       REDIS_URL: "redis://redis:6379/0"
-      CORS_ORIGINS: '["http://localhost:3000"]'
+      CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-3000}"]'
       STORAGE_BACKEND: local
       STORAGE_ROOT: /data
-      # 模型 API key 通过前端界面添加模型时填写，存入数据库。
-      # 无需在此配置。
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,27 +64,25 @@ services:
       dockerfile: Dockerfile
     container_name: evalscope-frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1"
+      NEXT_PUBLIC_API_URL: "http://localhost:${BACKEND_PORT:-8000}/api/v1"
     depends_on:
       - backend
     restart: unless-stopped
 
   # ── 可选服务（需要 --profile 启用）──
 
-  # 本地模型推理: docker compose --profile ollama up
   ollama:
     image: ollama/ollama:latest
     container_name: evalscope-ollama
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
     profiles:
       - ollama
 
-  # S3 对象存储: docker compose --profile s3 up
   minio:
     image: minio/minio:latest
     container_name: evalscope-minio
@@ -91,8 +91,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
