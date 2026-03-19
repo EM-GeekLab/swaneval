@@ -612,7 +612,7 @@ export default function ModelsPage() {
 
         {/* View panel — right half */}
         {viewPanelOpen && selectedModel && (
-          <div className="w-1/2 shrink-0">
+          <div className="w-1/3 shrink-0">
             <Card className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-auto">
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <h3 className="text-sm font-semibold truncate">{selectedModel.name}</h3>
@@ -1106,9 +1106,10 @@ function DetailRow({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 text-xs">
-      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
-      <div className="text-right min-w-0">{value}</div>
+    <div className="flex items-baseline gap-2 text-xs">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
+      <div className="text-right shrink-0 min-w-0">{value}</div>
     </div>
   );
 }
@@ -1160,14 +1161,15 @@ function EditableText({
 
   return (
     <div
-      className="flex items-start justify-between gap-3 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
+      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
       onClick={() => {
         setDraft(value);
         setEditing(true);
       }}
     >
-      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
-      <div className="flex items-center gap-1 min-w-0">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
+      <div className="flex items-center gap-1 shrink-0">
         {value ? (
           <span
             className={`truncate max-w-[180px] ${mono ? "font-mono" : ""} ${small ? "text-[11px]" : ""}`}
@@ -1232,11 +1234,12 @@ function EditableSecret({
 
   return (
     <div
-      className="flex items-start justify-between gap-3 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
+      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
       onClick={() => setEditing(true)}
     >
-      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
-      <div className="flex items-center gap-1 min-w-0">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
+      <div className="flex items-center gap-1 shrink-0">
         <span className="font-mono text-muted-foreground/70">••••••••</span>
         {saved ? (
           <Check className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
@@ -1295,11 +1298,12 @@ function EditableSelect({
 
   return (
     <div
-      className="flex items-start justify-between gap-3 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
+      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
       onClick={() => setEditing(true)}
     >
-      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
-      <div className="flex items-center gap-1">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
+      <div className="flex items-center gap-1 shrink-0">
         <Badge variant="outline" className="text-xs font-normal">
           {displayValue}
         </Badge>

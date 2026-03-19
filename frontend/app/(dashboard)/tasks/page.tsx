@@ -551,7 +551,7 @@ export default function TasksPage() {
 
         {/* Side panel: view only */}
         {viewPanelOpen && selectedTask && (
-          <div className="w-1/2 shrink-0">
+          <div className="w-1/3 shrink-0">
             <Card className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-auto">
               {/* Panel header */}
               <div className="flex items-center justify-between px-5 pt-5 pb-1">
@@ -1287,9 +1287,10 @@ function DetailRow({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 text-xs">
-      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
-      <div className="text-right min-w-0">{value}</div>
+    <div className="flex items-baseline gap-2 text-xs">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
+      <div className="text-right shrink-0 min-w-0">{value}</div>
     </div>
   );
 }
