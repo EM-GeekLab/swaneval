@@ -47,12 +47,12 @@ import {
   ArrowUpDown,
   X,
   ChevronRight,
-  Copy,
-  Check,
+  Pencil,
 } from "lucide-react";
 import {
   useModels,
   useCreateModel,
+  useUpdateModel,
   useDeleteModel,
   useTestModel,
 } from "@/lib/hooks/use-models";
@@ -87,6 +87,7 @@ const emptyForm = {
 export default function ModelsPage() {
   const { data: models = [], isLoading } = useModels();
   const create = useCreateModel();
+  const update = useUpdateModel();
   const deleteMut = useDeleteModel();
   const testModel = useTestModel();
 
@@ -100,7 +101,6 @@ export default function ModelsPage() {
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; message: string }>
   >({});
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -177,11 +177,7 @@ export default function ModelsPage() {
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 1500);
-  };
+
 
   const filteredData = useMemo(
     () =>
@@ -630,7 +626,7 @@ export default function ModelsPage() {
                 </CardContent>
               )}
 
-              {/* View mode */}
+              {/* View mode — inline editable */}
               {selectedModel && !isCreating && (
                 <CardContent className="pt-0 space-y-4">
                   {selectedModel.description && (
@@ -653,53 +649,74 @@ export default function ModelsPage() {
                         </Badge>
                       }
                     />
-                    <DetailRow
+                    <EditableSelect
                       label="API 协议"
-                      value={
-                        <Badge
-                          variant="outline"
-                          className="text-xs font-normal"
-                        >
-                          {apiFormatLabel[selectedModel.api_format] ??
-                            selectedModel.api_format}
-                        </Badge>
+                      value={selectedModel.api_format}
+                      displayValue={
+                        apiFormatLabel[selectedModel.api_format] ??
+                        selectedModel.api_format
+                      }
+                      options={[
+                        { value: "openai", label: "OpenAI" },
+                        { value: "anthropic", label: "Anthropic" },
+                      ]}
+                      onSave={(v) =>
+                        update.mutate({
+                          id: selectedModel.id,
+                          api_format: v,
+                        })
                       }
                     />
-                    {selectedModel.model_name && (
-                      <DetailRow
-                        label="模型 ID"
-                        value={
-                          <CopyableCode
-                            text={selectedModel.model_name}
-                            field="model_name"
-                            copiedField={copiedField}
-                            onCopy={copyToClipboard}
-                          />
-                        }
-                      />
-                    )}
-                    <DetailRow
+                    <EditableText
+                      label="模型 ID"
+                      value={selectedModel.model_name}
+                      mono
+                      onSave={(v) =>
+                        update.mutate({
+                          id: selectedModel.id,
+                          model_name: v,
+                        })
+                      }
+                    />
+                    <EditableText
                       label="端点"
-                      value={
-                        <CopyableCode
-                          text={selectedModel.endpoint_url}
-                          field="endpoint"
-                          copiedField={copiedField}
-                          onCopy={copyToClipboard}
-                          small
-                        />
+                      value={selectedModel.endpoint_url}
+                      mono
+                      small
+                      onSave={(v) =>
+                        update.mutate({
+                          id: selectedModel.id,
+                          endpoint_url: v,
+                        })
                       }
                     />
-                    {selectedModel.max_tokens && (
-                      <DetailRow
-                        label="最大 Token"
-                        value={
-                          <span className="font-mono">
-                            {selectedModel.max_tokens.toLocaleString()}
-                          </span>
-                        }
-                      />
-                    )}
+                    <EditableText
+                      label="最大 Token"
+                      value={
+                        selectedModel.max_tokens
+                          ? String(selectedModel.max_tokens)
+                          : ""
+                      }
+                      mono
+                      placeholder="未设置"
+                      onSave={(v) =>
+                        update.mutate({
+                          id: selectedModel.id,
+                          max_tokens: v ? parseInt(v) : null,
+                        })
+                      }
+                    />
+                    <EditableText
+                      label="描述"
+                      value={selectedModel.description}
+                      placeholder="无描述"
+                      onSave={(v) =>
+                        update.mutate({
+                          id: selectedModel.id,
+                          description: v,
+                        })
+                      }
+                    />
                     <DetailRow
                       label="注册时间"
                       value={utc(selectedModel.created_at)?.toLocaleString()}
@@ -824,39 +841,135 @@ function DetailRow({
   );
 }
 
-function CopyableCode({
-  text,
-  field,
-  copiedField,
-  onCopy,
+function EditableText({
+  label,
+  value,
+  mono,
   small,
+  placeholder,
+  onSave,
 }: {
-  text: string;
-  field: string;
-  copiedField: string | null;
-  onCopy: (text: string, field: string) => void;
+  label: string;
+  value: string;
+  mono?: boolean;
   small?: boolean;
+  placeholder?: string;
+  onSave: (value: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-start justify-between gap-3 text-xs">
+        <span className="text-muted-foreground shrink-0 pt-1.5">{label}</span>
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") {
+              setDraft(value);
+              setEditing(false);
+            }
+          }}
+          className={`h-7 text-xs text-right ${mono ? "font-mono" : ""}`}
+          autoFocus
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-1 justify-end">
-      <code
-        className={`font-mono truncate max-w-[160px] ${small ? "text-[11px]" : ""}`}
-      >
-        {text}
-      </code>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onCopy(text, field);
-        }}
-        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {copiedField === field ? (
-          <Check className="h-3 w-3 text-emerald-500" />
+    <div
+      className="flex items-start justify-between gap-3 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+    >
+      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
+      <div className="flex items-center gap-1 min-w-0">
+        {value ? (
+          <span
+            className={`truncate max-w-[180px] ${mono ? "font-mono" : ""} ${small ? "text-[11px]" : ""}`}
+          >
+            {value}
+          </span>
         ) : (
-          <Copy className="h-3 w-3" />
+          <span className="text-muted-foreground/50 italic">
+            {placeholder ?? "—"}
+          </span>
         )}
-      </button>
+        <Pencil className="h-2.5 w-2.5 text-muted-foreground/0 group-hover/edit:text-muted-foreground/50 transition-colors shrink-0" />
+      </div>
+    </div>
+  );
+}
+
+function EditableSelect({
+  label,
+  value,
+  displayValue,
+  options,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  displayValue: string;
+  options: { value: string; label: string }[];
+  onSave: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div className="flex items-start justify-between gap-3 text-xs">
+        <span className="text-muted-foreground shrink-0 pt-1.5">{label}</span>
+        <Select
+          value={value}
+          onValueChange={(v) => {
+            setEditing(false);
+            if (v !== value) onSave(v);
+          }}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditing(false);
+          }}
+        >
+          <SelectTrigger className="h-7 text-xs w-auto min-w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-start justify-between gap-3 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-muted/60 transition-colors"
+      onClick={() => setEditing(true)}
+    >
+      <span className="text-muted-foreground shrink-0 pt-0.5">{label}</span>
+      <div className="flex items-center gap-1">
+        <Badge variant="outline" className="text-xs font-normal">
+          {displayValue}
+        </Badge>
+        <Pencil className="h-2.5 w-2.5 text-muted-foreground/0 group-hover/edit:text-muted-foreground/50 transition-colors shrink-0" />
+      </div>
     </div>
   );
 }

@@ -33,6 +33,29 @@ export function useCreateModel() {
   });
 }
 
+export function useUpdateModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      name?: string;
+      endpoint_url?: string;
+      api_key?: string;
+      api_format?: string;
+      description?: string;
+      model_name?: string;
+      max_tokens?: number | null;
+    }) => {
+      const res = await api.put<LLMModel>(`/models/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
+  });
+}
+
 export function useDeleteModel() {
   const qc = useQueryClient();
   return useMutation({
