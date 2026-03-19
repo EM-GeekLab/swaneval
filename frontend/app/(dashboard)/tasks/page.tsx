@@ -431,7 +431,7 @@ export default function TasksPage() {
                   {table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className={`cursor-pointer transition-colors ${
+                      className={`cursor-pointer transition-colors group/row ${
                         selectedId === row.original.id
                           ? "bg-accent"
                           : "hover:bg-muted/50"
@@ -447,11 +447,32 @@ export default function TasksPage() {
                         </TableCell>
                       ))}
                       <TableCell className="py-2.5">
-                        <ChevronRight
-                          className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform ${
-                            selectedId === row.original.id ? "rotate-90" : ""
-                          }`}
-                        />
+                        <div className="flex items-center justify-end gap-0.5">
+                          <div
+                            className="opacity-0 group-hover/row:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              title="删除"
+                              onClick={() =>
+                                setDeleteTarget({
+                                  id: row.original.id,
+                                  name: row.original.name,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <ChevronRight
+                            className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover/row:hidden ${
+                              selectedId === row.original.id ? "rotate-90" : ""
+                            }`}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -410,7 +410,7 @@ export default function DatasetsPage() {
                   {table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className={`cursor-pointer transition-colors ${
+                      className={`cursor-pointer transition-colors group/row ${
                         selectedId === row.original.id
                           ? "bg-accent"
                           : "hover:bg-muted/50"
@@ -426,11 +426,41 @@ export default function DatasetsPage() {
                         </TableCell>
                       ))}
                       <TableCell className="py-2.5">
-                        <ChevronRight
-                          className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform ${
-                            selectedId === row.original.id ? "rotate-90" : ""
-                          }`}
-                        />
+                        <div className="flex items-center justify-end gap-0.5">
+                          <div
+                            className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="预览"
+                              onClick={() => setPreviewId(row.original.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              title="删除"
+                              onClick={() =>
+                                setDeleteTarget({
+                                  id: row.original.id,
+                                  name: row.original.name,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <ChevronRight
+                            className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover/row:hidden ${
+                              selectedId === row.original.id ? "rotate-90" : ""
+                            }`}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
