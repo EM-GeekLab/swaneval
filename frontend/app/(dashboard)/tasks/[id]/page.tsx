@@ -220,15 +220,21 @@ export default function TaskDetailPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {subtasks.map((st) => (
-              <div key={st.id} className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground w-16">
+              <div
+                key={st.id}
+                className="grid items-center gap-3"
+                style={{ gridTemplateColumns: "4rem 1fr 3rem 4.5rem" }}
+              >
+                <span className="text-xs text-muted-foreground">
                   运行 {st.run_index + 1}
                 </span>
-                <Progress value={st.progress_pct} className="flex-1 h-2" />
-                <span className="text-xs font-mono w-12 text-right">
+                <Progress value={st.progress_pct} className="h-2" />
+                <span className="text-xs font-mono text-right">
                   {st.progress_pct.toFixed(0)}%
                 </span>
-                <Badge variant={statusVariant(st.status)}>{st.status}</Badge>
+                <Badge variant={statusVariant(st.status)} className="justify-center">
+                  {st.status}
+                </Badge>
               </div>
             ))}
           </CardContent>
