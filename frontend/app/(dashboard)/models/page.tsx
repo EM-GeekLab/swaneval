@@ -50,6 +50,7 @@ import {
   Pencil,
   Copy,
   Check,
+  ClipboardPaste,
 } from "lucide-react";
 import {
   useModels,
@@ -124,6 +125,53 @@ export default function ModelsPage() {
   };
 
   const closePanel = () => setPanel(null);
+
+  const [importError, setImportError] = useState("");
+
+  const importFromClipboard = async () => {
+    setImportError("");
+    try {
+      const text = await navigator.clipboard.readText();
+      const data = JSON.parse(text);
+      setForm((f) => ({
+        ...f,
+        name: data.name ?? f.name,
+        provider: data.provider ?? f.provider,
+        endpoint_url: data.endpoint_url ?? f.endpoint_url,
+        api_key: data.api_key ?? f.api_key,
+        model_type: data.model_type ?? f.model_type,
+        api_format: data.api_format ?? f.api_format,
+        description: data.description ?? f.description,
+        model_name: data.model_name ?? f.model_name,
+        max_tokens: data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
+      }));
+    } catch {
+      setImportError("剪贴板内容不是有效的 JSON");
+      setTimeout(() => setImportError(""), 3000);
+    }
+  };
+
+  const importFromJson = (text: string) => {
+    setImportError("");
+    try {
+      const data = JSON.parse(text);
+      setForm((f) => ({
+        ...f,
+        name: data.name ?? f.name,
+        provider: data.provider ?? f.provider,
+        endpoint_url: data.endpoint_url ?? f.endpoint_url,
+        api_key: data.api_key ?? f.api_key,
+        model_type: data.model_type ?? f.model_type,
+        api_format: data.api_format ?? f.api_format,
+        description: data.description ?? f.description,
+        model_name: data.model_name ?? f.model_name,
+        max_tokens: data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
+      }));
+    } catch {
+      setImportError("无法解析 JSON");
+      setTimeout(() => setImportError(""), 3000);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -531,6 +579,42 @@ export default function ModelsPage() {
               {/* Create mode */}
               {isCreating && (
                 <CardContent className="pt-0">
+                  {/* Import actions */}
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={importFromClipboard}
+                    >
+                      <ClipboardPaste className="mr-1.5 h-3 w-3" />
+                      从剪贴板导入
+                    </Button>
+                    <label className="flex-1">
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () =>
+                            importFromJson(reader.result as string);
+                          reader.readAsText(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      <span className="inline-flex items-center justify-center h-7 text-xs px-3 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors w-full">
+                        导入 JSON
+                      </span>
+                    </label>
+                  </div>
+                  {importError && (
+                    <p className="text-xs text-destructive mb-2">{importError}</p>
+                  )}
+
                   <form onSubmit={handleCreate} className="space-y-3">
                     <PanelField label="显示名称" required>
                       <Input

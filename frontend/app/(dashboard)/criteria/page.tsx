@@ -44,6 +44,7 @@ import {
   FlaskConical,
   Copy,
   Check,
+  ClipboardPaste,
   Loader2,
   Search,
   ArrowUpDown,
@@ -147,6 +148,32 @@ export default function CriteriaPage() {
     );
   };
   const closePanel = () => setPanel(null);
+  const [importError, setImportError] = useState("");
+
+  const importCriterionJson = (text: string) => {
+    setImportError("");
+    try {
+      const data = JSON.parse(text);
+      const cfg = data.config_json
+        ? typeof data.config_json === "string"
+          ? JSON.parse(data.config_json)
+          : data.config_json
+        : {};
+      setForm((f) => ({
+        ...f,
+        name: data.name ?? f.name,
+        type: data.type ?? f.type,
+        metric: cfg.metric ?? f.metric,
+        pattern: cfg.pattern ?? f.pattern,
+        script_path: cfg.script_path ?? f.script_path,
+        entrypoint: cfg.entrypoint ?? f.entrypoint,
+        judge_prompt: cfg.system_prompt ?? f.judge_prompt,
+      }));
+    } catch {
+      setImportError("无法解析 JSON");
+      setTimeout(() => setImportError(""), 3000);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -504,6 +531,49 @@ export default function CriteriaPage() {
               {/* Create mode */}
               {isCreating && (
                 <CardContent className="pt-0">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          importCriterionJson(text);
+                        } catch {
+                          setImportError("无法读取剪贴板");
+                          setTimeout(() => setImportError(""), 3000);
+                        }
+                      }}
+                    >
+                      <ClipboardPaste className="mr-1.5 h-3 w-3" />
+                      从剪贴板导入
+                    </Button>
+                    <label className="flex-1">
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () =>
+                            importCriterionJson(reader.result as string);
+                          reader.readAsText(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      <span className="inline-flex items-center justify-center h-7 text-xs px-3 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors w-full">
+                        导入 JSON
+                      </span>
+                    </label>
+                  </div>
+                  {importError && (
+                    <p className="text-xs text-destructive mb-2">{importError}</p>
+                  )}
+
                   <form onSubmit={handleCreate} className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       <PanelField label="名称" required>
