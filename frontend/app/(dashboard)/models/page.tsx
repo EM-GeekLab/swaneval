@@ -65,6 +65,7 @@ import { utc } from "@/lib/utils";
 const typeLabel: Record<string, string> = {
   api: "API",
   local: "本地",
+  huggingface: "HuggingFace",
 };
 
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
@@ -179,13 +180,16 @@ export default function ModelsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isHF = form.model_type === "huggingface";
     await create.mutateAsync({
       name: form.name,
-      provider: form.provider,
-      endpoint_url: form.endpoint_url,
+      provider: isHF ? "huggingface" : form.provider,
+      endpoint_url: isHF
+        ? `https://api-inference.huggingface.co/models/${form.model_name}/v1/chat/completions`
+        : form.endpoint_url,
       api_key: form.api_key || undefined,
       model_type: form.model_type,
-      api_format: form.api_format,
+      api_format: isHF ? "openai" : form.api_format,
       description: form.description || undefined,
       model_name: form.model_name || undefined,
       max_tokens: form.max_tokens ? parseInt(form.max_tokens) : undefined,
@@ -706,58 +710,90 @@ export default function ModelsPage() {
                           <SelectContent>
                             <SelectItem value="api">API</SelectItem>
                             <SelectItem value="local">本地</SelectItem>
+                            <SelectItem value="huggingface">HuggingFace</SelectItem>
                           </SelectContent>
                         </Select>
                       </PanelField>
                     </div>
-                    <PanelField label="API 协议">
-                      <Select
-                        value={form.api_format}
-                        onValueChange={(v) =>
-                          setForm({ ...form, api_format: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="openai">OpenAI</SelectItem>
-                          <SelectItem value="anthropic">Anthropic</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </PanelField>
-                    <PanelField label="模型 ID">
-                      <Input
-                        value={form.model_name}
-                        onChange={(e) =>
-                          setForm({ ...form, model_name: e.target.value })
-                        }
-                        placeholder="gpt-4o-2024-08-06"
-                        className="font-mono"
-                      />
-                    </PanelField>
-                    <PanelField label="端点 URL" required>
-                      <Input
-                        value={form.endpoint_url}
-                        onChange={(e) =>
-                          setForm({ ...form, endpoint_url: e.target.value })
-                        }
-                        placeholder="https://api.openai.com/v1/..."
-                        className="font-mono"
-                        required
-                      />
-                    </PanelField>
+                    {form.model_type === "huggingface" ? (
+                      <>
+                        <PanelField label="HuggingFace 模型 ID" required>
+                          <Input
+                            value={form.model_name}
+                            onChange={(e) =>
+                              setForm({ ...form, model_name: e.target.value })
+                            }
+                            placeholder="Qwen/Qwen2.5-0.5B-Instruct"
+                            className="font-mono"
+                            required
+                          />
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            HuggingFace 模型仓库 ID，将通过 Inference API 调用
+                          </p>
+                        </PanelField>
+                        <PanelField label="HF Token">
+                          <Input
+                            type="password"
+                            value={form.api_key}
+                            onChange={(e) =>
+                              setForm({ ...form, api_key: e.target.value })
+                            }
+                            placeholder="hf_..."
+                          />
+                        </PanelField>
+                      </>
+                    ) : (
+                      <>
+                        <PanelField label="API 协议">
+                          <Select
+                            value={form.api_format}
+                            onValueChange={(v) =>
+                              setForm({ ...form, api_format: v })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="openai">OpenAI</SelectItem>
+                              <SelectItem value="anthropic">Anthropic</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </PanelField>
+                        <PanelField label="模型 ID">
+                          <Input
+                            value={form.model_name}
+                            onChange={(e) =>
+                              setForm({ ...form, model_name: e.target.value })
+                            }
+                            placeholder="gpt-4o-2024-08-06"
+                            className="font-mono"
+                          />
+                        </PanelField>
+                        <PanelField label="端点 URL" required>
+                          <Input
+                            value={form.endpoint_url}
+                            onChange={(e) =>
+                              setForm({ ...form, endpoint_url: e.target.value })
+                            }
+                            placeholder="https://api.openai.com/v1/..."
+                            className="font-mono"
+                            required
+                          />
+                        </PanelField>
+                        <PanelField label="API 密钥">
+                          <Input
+                            type="password"
+                            value={form.api_key}
+                            onChange={(e) =>
+                              setForm({ ...form, api_key: e.target.value })
+                            }
+                            placeholder="sk-..."
+                          />
+                        </PanelField>
+                      </>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
-                      <PanelField label="API 密钥">
-                        <Input
-                          type="password"
-                          value={form.api_key}
-                          onChange={(e) =>
-                            setForm({ ...form, api_key: e.target.value })
-                          }
-                          placeholder="sk-..."
-                        />
-                      </PanelField>
                       <PanelField label="最大 Token">
                         <Input
                           type="number"
