@@ -456,7 +456,7 @@ export default function DatasetsPage() {
                             </Button>
                           </div>
                           <ChevronRight
-                            className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover/row:hidden ${
+                            className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform ${
                               selectedId === row.original.id ? "rotate-90" : ""
                             }`}
                           />
