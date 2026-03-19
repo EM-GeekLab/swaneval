@@ -16,9 +16,6 @@ module.exports = {
       },
     },
     extend: {
-      fontFamily: {
-        mono: ["var(--font-mono)", "Menlo", "Consolas", "monospace"],
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -37,14 +34,6 @@ module.exports = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
-        success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
-        },
-        warning: {
-          DEFAULT: "hsl(var(--warning))",
-          foreground: "hsl(var(--warning-foreground))",
-        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -61,12 +50,11 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        "surface-raised": "hsl(var(--surface-raised))",
       },
       borderRadius: {
-        lg: "var(--radius-lg)",
-        md: "var(--radius)",
-        sm: "var(--radius-sm)",
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
         "accordion-down": {
@@ -78,14 +66,14 @@ module.exports = {
           to: { height: 0 },
         },
         "modal-expand": {
-          from: { opacity: "0", transform: "scale(0.92)" },
+          from: { opacity: "0", transform: "scale(0.85)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
         "float-up": {
-          from: { opacity: "0", transform: "translateY(12px)" },
+          from: { opacity: "0", transform: "translateY(16px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        shake: {
+        "shake": {
           "0%, 100%": { transform: "translateX(0)" },
           "15%, 55%": { transform: "translateX(-5px)" },
           "35%, 75%": { transform: "translateX(5px)" },
@@ -98,10 +86,10 @@ module.exports = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "modal-expand": "modal-expand 0.15s ease-out",
-        "float-up": "float-up 0.2s ease-out forwards",
-        shake: "shake 0.4s ease-in-out",
-        "backdrop-in": "backdrop-in 0.12s ease-out",
+        "modal-expand": "modal-expand 0.2s ease-out",
+        "float-up": "float-up 0.25s ease-out forwards",
+        "shake": "shake 0.4s ease-in-out",
+        "backdrop-in": "backdrop-in 0.15s ease-out",
       },
     },
   },

@@ -484,7 +484,7 @@ export default function ResultsPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold tracking-tight">结果分析</h1>
+        <h1 className="text-lg font-semibold">结果分析</h1>
         <Button
           size="sm"
           variant="outline"

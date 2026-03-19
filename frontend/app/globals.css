@@ -5,32 +5,25 @@
 @layer base {
   :root {
     --background: 240 5% 96%;
-    --foreground: 224 12% 10%;
+    --foreground: 224 10% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 224 12% 10%;
+    --card-foreground: 224 10% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 12% 10%;
-    --primary: 235 70% 58%;
+    --popover-foreground: 224 10% 10%;
+    --primary: 239 84% 67%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 5% 93%;
-    --secondary-foreground: 224 12% 10%;
+    --secondary-foreground: 224 10% 10%;
     --muted: 240 5% 93%;
-    --muted-foreground: 240 4% 40%;
+    --muted-foreground: 240 4% 46%;
     --accent: 240 5% 93%;
-    --accent-foreground: 224 12% 10%;
-    --destructive: 4 72% 49%;
+    --accent-foreground: 224 10% 10%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --success: 160 72% 36%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 48%;
-    --warning-foreground: 0 0% 100%;
-    --border: 240 6% 87%;
-    --input: 240 6% 84%;
-    --ring: 235 70% 58%;
+    --border: 240 6% 88%;
+    --input: 240 6% 88%;
+    --ring: 239 84% 67%;
     --radius: 0.5rem;
-    --radius-sm: 0.25rem;
-    --radius-lg: 0.75rem;
-    --surface-raised: 240 5% 94%;
   }
 
   .dark {
@@ -40,24 +33,19 @@
     --card-foreground: 0 0% 95%;
     --popover: 240 5% 12%;
     --popover-foreground: 0 0% 95%;
-    --primary: 235 80% 72%;
+    --primary: 239 84% 74%;
     --primary-foreground: 240 6% 6%;
     --secondary: 240 4% 15%;
     --secondary-foreground: 0 0% 95%;
     --muted: 240 4% 15%;
-    --muted-foreground: 240 4% 58%;
+    --muted-foreground: 240 4% 55%;
     --accent: 240 4% 15%;
     --accent-foreground: 0 0% 95%;
-    --destructive: 4 63% 38%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 95%;
-    --success: 160 60% 44%;
-    --success-foreground: 0 0% 95%;
-    --warning: 38 80% 52%;
-    --warning-foreground: 0 0% 10%;
     --border: 240 4% 18%;
-    --input: 240 4% 20%;
-    --ring: 235 70% 65%;
-    --surface-raised: 240 5% 12%;
+    --input: 240 4% 18%;
+    --ring: 239 84% 67%;
   }
 }
 
@@ -67,15 +55,25 @@
   }
   body {
     @apply bg-background text-foreground text-sm antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  }
-  /* Focus visible — consistent outline style globally */
-  :focus-visible {
-    @apply outline-2 outline-offset-2 outline-primary/50;
   }
 }
 
-/* ── Login page animated mesh gradient ── */
+/* Login page animated mesh gradient */
+@keyframes login-gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 50% 0%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  75% {
+    background-position: 50% 100%;
+  }
+}
+
 @keyframes blob-drift-1 {
   0%, 100% { transform: translate(0%, 0%) scale(1); }
   33% { transform: translate(30%, -20%) scale(1.1); }
@@ -97,7 +95,7 @@
 .login-bg {
   position: relative;
   overflow: hidden;
-  background-color: #161430;
+  background-color: #1e1b4b;
 }
 
 .login-bg::before,
@@ -107,7 +105,7 @@
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
 .login-bg::before {
@@ -115,7 +113,7 @@
   height: 60%;
   top: -10%;
   left: -10%;
-  background: radial-gradient(circle, hsl(235 70% 58%) 0%, transparent 70%);
+  background: radial-gradient(circle, #6366f1 0%, transparent 70%);
   animation: blob-drift-1 20s ease-in-out infinite;
 }
 
@@ -124,7 +122,7 @@
   height: 50%;
   bottom: -5%;
   right: -5%;
-  background: radial-gradient(circle, #7c5cbf 0%, transparent 70%);
+  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
   animation: blob-drift-2 25s ease-in-out infinite;
 }
 
@@ -133,24 +131,51 @@
   height: 45%;
   top: 40%;
   left: 30%;
-  background: radial-gradient(circle, #3730a3 0%, transparent 70%);
+  background: radial-gradient(circle, #4338ca 0%, transparent 70%);
   animation: blob-drift-3 22s ease-in-out infinite;
 }
 
-/* ── Dashboard hero — subtle top wash ── */
+/* Dashboard hero — subtle but visible gradient */
 .dashboard-hero-bg {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(
-      to bottom,
-      hsl(var(--primary) / 0.03) 0%,
-      transparent 40%
-    ),
-    hsl(var(--background));
+  background-color: hsl(var(--background));
 }
 
-/* hide the d-blob element (no longer using blobs on dashboard) */
+.dashboard-hero-bg::before,
+.dashboard-hero-bg::after,
 .dashboard-hero-bg > .d-blob {
-  display: none;
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.dashboard-hero-bg::before {
+  width: 55%;
+  height: 130%;
+  top: -40%;
+  left: -10%;
+  background: radial-gradient(circle, #6366f1 0%, transparent 65%);
+  animation: blob-drift-1 22s ease-in-out infinite;
+}
+
+.dashboard-hero-bg::after {
+  width: 45%;
+  height: 110%;
+  bottom: -25%;
+  right: -5%;
+  background: radial-gradient(circle, #8b5cf6 0%, transparent 65%);
+  animation: blob-drift-2 28s ease-in-out infinite;
+}
+
+.dashboard-hero-bg > .d-blob {
+  width: 40%;
+  height: 90%;
+  top: 15%;
+  left: 30%;
+  background: radial-gradient(circle, #4338ca 0%, transparent 65%);
+  animation: blob-drift-3 25s ease-in-out infinite;
 }

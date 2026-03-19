@@ -105,13 +105,13 @@ export default function OverviewPage() {
   ];
 
   return (
-    <div className="dashboard-hero-bg flex flex-col h-[calc(100vh-3rem)] -m-5">
+    <div className="dashboard-hero-bg flex flex-col h-[calc(100vh-3.5rem)] -m-6">
       <div className="d-blob" />
 
       {/* ── Header bar ── */}
-      <div className="relative z-10 shrink-0 px-5 pt-5 pb-3">
+      <div className="relative z-10 shrink-0 px-6 pt-6 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-base font-semibold tracking-tight">概览</h1>
+          <h1 className="text-lg font-semibold">概览</h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <span>成功率</span>
@@ -140,7 +140,7 @@ export default function OverviewPage() {
       </div>
 
       {/* ── Pipeline flow (compact) ── */}
-      <div className="relative z-10 shrink-0 px-5 pb-3">
+      <div className="relative z-10 shrink-0 px-6 pb-3">
         <div className="grid grid-cols-5 gap-3">
           {pipelineNodes.map((node, i) => (
             <Link key={node.label} href={node.href} className="group">
@@ -171,7 +171,7 @@ export default function OverviewPage() {
       </div>
 
       {/* ── Main area: status cards (flex-1 to fill remaining space) ── */}
-      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-3 gap-3 px-5 pb-3">
+      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-3 gap-3 px-6 pb-3">
         {/* Running tasks */}
         <div className="flex flex-col min-h-0 rounded-lg border border-border/50 bg-card/40 backdrop-blur-sm">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 shrink-0">
@@ -270,7 +270,7 @@ export default function OverviewPage() {
 
       {/* ── Bottom: Leaderboard preview (compact) ── */}
       {leaderboard.length > 0 && (
-        <div className="relative z-10 shrink-0 px-5 pb-4">
+        <div className="relative z-10 shrink-0 px-6 pb-5">
           <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur-sm p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

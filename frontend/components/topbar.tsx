@@ -29,19 +29,14 @@ export function Topbar() {
   const { user, logout } = useAuthStore();
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-card">
-      <div className="flex h-12 items-center px-5 gap-5">
-        <Link
-          href="/"
-          className="shrink-0 mr-1 flex items-center gap-2 text-primary"
-        >
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center px-6 gap-6">
+        <Link href="/" className="shrink-0 mr-2 flex items-center gap-2 text-primary">
           <Logo className="h-5 w-5" />
-          <span className="text-sm font-bold tracking-tight">
-            SwanEVAL
-          </span>
+          <span className="text-base font-bold tracking-tight">SwanEVAL</span>
         </Link>
 
-        <nav className="flex items-center gap-0.5 flex-1" role="navigation">
+        <nav className="flex items-center gap-1 flex-1">
           {nav.map((item) => {
             const active =
               item.href === "/"
@@ -52,14 +47,13 @@ export function Topbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-150",
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors whitespace-nowrap",
                   active
-                    ? "text-primary bg-primary/[0.06]"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 )}
-                aria-current={active ? "page" : undefined}
               >
-                <item.icon className="h-3.5 w-3.5" />
+                <item.icon className="h-4 w-4" />
                 <span>{item.label}</span>
               </Link>
             );
@@ -69,23 +63,18 @@ export function Topbar() {
         {user && (
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-medium leading-none">
-                {user.username}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {user.role}
-              </p>
+              <p className="text-sm font-medium leading-none">{user.username}</p>
+              <p className="text-xs text-muted-foreground">{user.role}</p>
             </div>
             <button
               onClick={() => {
                 logout();
                 window.location.href = "/login";
               }}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               title="退出登录"
-              aria-label="退出登录"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         )}

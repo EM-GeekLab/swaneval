@@ -440,7 +440,7 @@ export default function DatasetsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-5">
-          <h1 className="text-base font-semibold tracking-tight">数据集管理</h1>
+          <h1 className="text-lg font-semibold">数据集管理</h1>
           <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
             <span>
               共{" "}
@@ -897,7 +897,7 @@ export default function DatasetsPage() {
       {/* Create modal */}
       {isCreating && createPos && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-50 animate-backdrop-in" onClick={() => {
+          <div className="fixed inset-0 bg-black/40 z-50 animate-backdrop-in" onClick={() => {
             if (formDirty) { setShakeCancel(true); return; }
             closePanel();
           }} />
