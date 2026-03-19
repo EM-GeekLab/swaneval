@@ -3,7 +3,6 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import Link from "next/link";
 import Xarrow, { Xwrapper } from "react-xarrows";
-import { Logo } from "@/components/logo";
 import { Badge } from "@/components/ui/badge";
 import {
   Cpu,
@@ -146,17 +145,14 @@ export default function OverviewPage() {
         {/* ── Top HUD bar ── */}
         <div className="relative z-10 shrink-0 px-6 pt-5 pb-3">
           <div className="flex items-start justify-between">
-            {/* Left: brand + subtitle */}
-            <div className="flex items-center gap-3">
-              <Logo className="h-8 w-8 text-primary/60" />
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-foreground/90 leading-none">
-                  概览
-                </h1>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  系统状态总览
-                </p>
-              </div>
+            {/* Left: title */}
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-foreground/90 leading-none">
+                概览
+              </h1>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                系统状态总览
+              </p>
             </div>
 
             {/* Right: HUD metric chips */}
@@ -210,58 +206,62 @@ export default function OverviewPage() {
 
         {/* ── Middle: status strip ── */}
         <div className="relative z-10 shrink-0 px-6 pb-4">
-          <div className="flex items-center gap-6">
-            {/* Success rate bar */}
-            <div className="flex items-center gap-3 flex-1 max-w-xs">
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-muted-foreground">成功率</span>
-                  <span className="font-semibold tabular-nums">
-                    {successRate}%
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary/70 transition-all duration-500"
-                    style={{ width: `${successRate}%` }}
-                  />
-                </div>
+          <div className="flex items-center gap-4 text-xs">
+            {/* Success rate */}
+            <div className="flex items-center gap-2.5">
+              <span className="text-muted-foreground whitespace-nowrap">成功率</span>
+              <div className="w-28 h-1.5 rounded-full bg-border/60 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${successRate}%` }}
+                />
               </div>
+              <span className="font-semibold tabular-nums text-foreground w-8 text-right">
+                {successRate}%
+              </span>
             </div>
+
+            <div className="w-px h-4 bg-border/50" />
 
             {/* Running indicator */}
             {runningTasks.length > 0 && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {runningTasks.length}
-                  </span>{" "}
-                  个任务运行中
-                </span>
-              </div>
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                  </span>
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {runningTasks.length}
+                    </span>{" "}
+                    运行中
+                  </span>
+                </div>
+                <div className="w-px h-4 bg-border/50" />
+              </>
             )}
 
             {/* Failed indicator */}
             {failedTasks.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-destructive/70">
-                <AlertTriangle className="h-3 w-3" />
-                <span className="tabular-nums">{failedTasks.length} 失败</span>
-              </div>
+              <>
+                <div className="flex items-center gap-1.5 text-destructive/70">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span className="tabular-nums">{failedTasks.length} 失败</span>
+                </div>
+                <div className="w-px h-4 bg-border/50" />
+              </>
             )}
 
-            {/* Top model from leaderboard */}
+            {/* Top model */}
             {topModel && (
               <Link
                 href="/results"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors ml-auto"
               >
                 <BarChart3 className="h-3 w-3" />
                 <span>
-                  最佳:{" "}
+                  最佳{" "}
                   <span className="font-medium text-foreground">
                     {topModel.model_name}
                   </span>{" "}
