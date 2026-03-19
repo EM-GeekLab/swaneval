@@ -196,7 +196,9 @@ async def _call_model(
     )
     if not endpoint_url:
         raise ValueError("Missing endpoint_url: set model.endpoint_url or DEFAULT_MODEL_ENDPOINT_URL")
-    anthropic_mode = _is_anthropic_endpoint(endpoint_url)
+    anthropic_mode = getattr(model, "api_format", "openai") == "anthropic"
+    if not anthropic_mode:
+        anthropic_mode = _is_anthropic_endpoint(endpoint_url)
     if anthropic_mode:
         headers["anthropic-version"] = "2023-06-01"
 

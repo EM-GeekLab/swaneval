@@ -46,10 +46,11 @@ async def test_model_connectivity(
     endpoint_url: str,
     api_key: str,
     model_name: str,
+    api_format: str = "openai",
     timeout_seconds: float = 15.0,
     client: httpx.AsyncClient | None = None,
 ) -> tuple[bool, str]:
-    """Send a minimal OpenAI-compatible request and return a readable result."""
+    """Send a minimal request in the specified format and return a readable result."""
     if not endpoint_url:
         return False, "Missing endpoint_url"
     if not model_name:
@@ -57,9 +58,12 @@ async def test_model_connectivity(
     if not api_key:
         return False, "Missing api_key"
 
-    resolved_endpoint = _normalize_endpoint_url(endpoint_url)
+    anthropic_mode = api_format == "anthropic" or _is_anthropic_endpoint(endpoint_url)
+    resolved_endpoint = _normalize_endpoint_url(endpoint_url) if anthropic_mode else endpoint_url
     payload = _build_payload(model_name=model_name, endpoint_url=resolved_endpoint)
     headers = _build_headers(api_key=api_key, endpoint_url=resolved_endpoint)
+    if anthropic_mode and "anthropic-version" not in headers:
+        headers["anthropic-version"] = "2023-06-01"
 
     async def _do_request(http_client: httpx.AsyncClient) -> tuple[bool, str]:
         response = await http_client.post(

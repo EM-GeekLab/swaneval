@@ -10,9 +10,15 @@ from sqlmodel import Field, SQLModel
 # 模型类型枚举 / Model type enumeration
 class ModelType(str, enum.Enum):
     """模型类型枚举 / Model type enumeration"""
-    api = "api"           # API 类型模型 / API-based model (e.g., OpenAI, Anthropic)
-    local = "local"       # 本地部署模型 / Locally deployed model (e.g., vLLM, Ollama)
-    huggingface = "huggingface"  # HuggingFace Hub 模型 / HuggingFace Hub model
+    api = "api"
+    local = "local"
+    huggingface = "huggingface"
+
+
+class ApiFormat(str, enum.Enum):
+    """API 协议格式 / API protocol format"""
+    openai = "openai"
+    anthropic = "anthropic"
 
 
 class LLMModel(SQLModel, table=True):
@@ -41,6 +47,11 @@ class LLMModel(SQLModel, table=True):
 
     model_type: ModelType = Field(sa_column=Column(SAEnum(ModelType), nullable=False))
     # 模型类型 / Model type (api/local/huggingface)
+
+    api_format: ApiFormat = Field(
+        sa_column=Column(SAEnum(ApiFormat), nullable=False, server_default="openai")
+    )
+    # API 协议格式 / openai or anthropic
 
     description: str = Field(default="")
     # 模型描述 / Human-readable model description

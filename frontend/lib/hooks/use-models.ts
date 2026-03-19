@@ -21,6 +21,7 @@ export function useCreateModel() {
       endpoint_url: string;
       api_key?: string;
       model_type: string;
+      api_format?: string;
       description?: string;
       model_name?: string;
       max_tokens?: number;

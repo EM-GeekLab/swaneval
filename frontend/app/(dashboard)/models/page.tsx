@@ -67,12 +67,18 @@ const typeLabel: Record<string, string> = {
 
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
+const apiFormatLabel: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+};
+
 const emptyForm = {
   name: "",
   provider: "",
   endpoint_url: "",
   api_key: "",
   model_type: "api",
+  api_format: "openai",
   description: "",
   model_name: "",
   max_tokens: "4096",
@@ -124,6 +130,7 @@ export default function ModelsPage() {
       endpoint_url: form.endpoint_url,
       api_key: form.api_key || undefined,
       model_type: form.model_type,
+      api_format: form.api_format,
       description: form.description || undefined,
       model_name: form.model_name || undefined,
       max_tokens: form.max_tokens ? parseInt(form.max_tokens) : undefined,
@@ -538,6 +545,22 @@ export default function ModelsPage() {
                         </Select>
                       </PanelField>
                     </div>
+                    <PanelField label="API 协议">
+                      <Select
+                        value={form.api_format}
+                        onValueChange={(v) =>
+                          setForm({ ...form, api_format: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="anthropic">Anthropic</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </PanelField>
                     <PanelField label="模型 ID">
                       <Input
                         value={form.model_name}
@@ -627,6 +650,18 @@ export default function ModelsPage() {
                         >
                           {typeLabel[selectedModel.model_type] ??
                             selectedModel.model_type}
+                        </Badge>
+                      }
+                    />
+                    <DetailRow
+                      label="API 协议"
+                      value={
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-normal"
+                        >
+                          {apiFormatLabel[selectedModel.api_format] ??
+                            selectedModel.api_format}
                         </Badge>
                       }
                     />

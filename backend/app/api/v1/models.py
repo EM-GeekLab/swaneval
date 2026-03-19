@@ -35,6 +35,7 @@ async def create_model(
         endpoint_url=body.endpoint_url,
         api_key=body.api_key,
         model_type=body.model_type,
+        api_format=body.api_format,
         description=body.description,
         model_name=body.model_name,
         max_tokens=body.max_tokens,
@@ -83,6 +84,8 @@ async def update_model(
         m.endpoint_url = body.endpoint_url
     if body.api_key is not None:
         m.api_key = body.api_key
+    if body.api_format is not None:
+        m.api_format = body.api_format
     if body.description is not None:
         m.description = body.description
     if body.model_name is not None:
@@ -114,6 +117,7 @@ async def test_model(
         endpoint_url=endpoint_url,
         api_key=api_key,
         model_name=model_name,
+        api_format=m.api_format or "openai",
     )
     return ModelTestResponse(ok=ok, message=message)
 
