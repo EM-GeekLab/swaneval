@@ -183,6 +183,8 @@ export default function ResultsPage() {
     () => [
       {
         id: "rank",
+        size: 40,
+        enableResizing: false,
         header: "#",
         cell: ({ row }) => (
           <span className="text-muted-foreground tabular-nums">
@@ -448,7 +450,7 @@ export default function ResultsPage() {
                     {lbTable.getHeaderGroups().map((hg) => (
                       <TableRow key={hg.id}>
                         {hg.headers.map((header) => (
-                          <TableHead key={header.id} className="select-none">
+                          <TableHead key={header.id} className="select-none" style={header.column.id === "rank" ? { width: 40 } : undefined}>
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext(),
@@ -462,7 +464,7 @@ export default function ResultsPage() {
                     {lbTable.getRowModel().rows.map((row) => (
                       <TableRow key={row.id} className="hover:bg-muted/50">
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className="py-2.5">
+                          <TableCell key={cell.id} className="py-2.5" style={cell.column.id === "rank" ? { width: 40 } : undefined}>
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext(),
