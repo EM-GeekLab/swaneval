@@ -103,6 +103,7 @@ export default function DatasetsPage() {
   const [deleteError, setDeleteError] = useState("");
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -431,6 +432,34 @@ export default function DatasetsPage() {
                             className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="复制信息"
+                              onClick={() => {
+                                const d = row.original;
+                                const config = {
+                                  name: d.name,
+                                  source_type: d.source_type,
+                                  source_uri: d.source_uri,
+                                  format: d.format,
+                                  tags: d.tags,
+                                  row_count: d.row_count,
+                                };
+                                navigator.clipboard.writeText(
+                                  JSON.stringify(config, null, 2),
+                                );
+                                setCopiedRowId(d.id);
+                                setTimeout(() => setCopiedRowId(null), 1500);
+                              }}
+                            >
+                              {copiedRowId === row.original.id ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

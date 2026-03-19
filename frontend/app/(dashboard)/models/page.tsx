@@ -48,6 +48,8 @@ import {
   X,
   ChevronRight,
   Pencil,
+  Copy,
+  Check,
 } from "lucide-react";
 import {
   useModels,
@@ -101,6 +103,7 @@ export default function ModelsPage() {
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; message: string }>
   >({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -431,6 +434,35 @@ export default function ModelsPage() {
                             className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="复制配置"
+                              onClick={() => {
+                                const m = row.original;
+                                const config = {
+                                  name: m.name,
+                                  provider: m.provider,
+                                  model_type: m.model_type,
+                                  api_format: m.api_format,
+                                  model_name: m.model_name,
+                                  endpoint_url: m.endpoint_url,
+                                  max_tokens: m.max_tokens,
+                                };
+                                navigator.clipboard.writeText(
+                                  JSON.stringify(config, null, 2),
+                                );
+                                setCopiedId(m.id);
+                                setTimeout(() => setCopiedId(null), 1500);
+                              }}
+                            >
+                              {copiedId === row.original.id ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

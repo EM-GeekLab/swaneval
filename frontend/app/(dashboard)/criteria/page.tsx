@@ -42,6 +42,8 @@ import {
   Plus,
   Trash2,
   FlaskConical,
+  Copy,
+  Check,
   Loader2,
   Search,
   ArrowUpDown,
@@ -122,6 +124,7 @@ export default function CriteriaPage() {
     actual: "",
   });
   const [testResult, setTestResult] = useState<{ score: number } | null>(null);
+  const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -409,6 +412,31 @@ export default function CriteriaPage() {
                             className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="复制配置"
+                              onClick={() => {
+                                const c = row.original;
+                                const config = {
+                                  name: c.name,
+                                  type: c.type,
+                                  config_json: c.config_json,
+                                };
+                                navigator.clipboard.writeText(
+                                  JSON.stringify(config, null, 2),
+                                );
+                                setCopiedRowId(c.id);
+                                setTimeout(() => setCopiedRowId(null), 1500);
+                              }}
+                            >
+                              {copiedRowId === row.original.id ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
