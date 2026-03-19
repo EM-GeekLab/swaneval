@@ -146,14 +146,9 @@ export default function OverviewPage() {
         <div className="d-blob" />
 
         {/* ── Top HUD bar ── */}
-        <div className="relative z-10 shrink-0 px-6 pt-5 pb-3">
-          <div className="flex items-start justify-between">
-            {/* Left: title */}
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground/90 leading-none">
-                概览
-              </h1>
-            </div>
+        <div className="relative z-10 shrink-0 px-6 pt-6 pb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold">概览</h1>
 
             {/* Right: HUD metric chips */}
             <div className="flex items-center gap-1">
