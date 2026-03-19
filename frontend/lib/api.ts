@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1",
+  baseURL: "/api/v1",
 });
 
 // Auto-set Content-Type: let Axios handle multipart/form-data when body is FormData
