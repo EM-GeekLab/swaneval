@@ -110,11 +110,11 @@ export default function AccountPage() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label htmlFor="acc-old-pw" className="text-xs">旧密码</Label>
-              <Input id="acc-old-pw" type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className="h-9 max-w-[240px]" autoComplete="current-password" />
+              <Input id="acc-old-pw" type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className="h-9 max-w-xs" autoComplete="current-password" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-new-pw" className="text-xs">新密码</Label>
-              <Input id="acc-new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="h-9 max-w-[240px]" autoComplete="new-password" />
+              <Input id="acc-new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="h-9 max-w-xs" autoComplete="new-password" />
             </div>
           </div>
           {pwError && <p className="text-xs text-destructive">{pwError}</p>}

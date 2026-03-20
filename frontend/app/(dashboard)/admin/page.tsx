@@ -304,11 +304,11 @@ export default function AdminPage() {
                     <div className="space-y-2">
                       <div className="space-y-1">
                         <Label className="text-xs">旧密码</Label>
-                        <Input type="password" value={adminOldPw} onChange={(e) => setAdminOldPw(e.target.value)} className="h-8 max-w-[200px]" autoComplete="current-password" />
+                        <Input type="password" value={adminOldPw} onChange={(e) => setAdminOldPw(e.target.value)} className="h-8 max-w-xs" autoComplete="current-password" />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">新密码</Label>
-                        <Input type="password" value={adminNewPw} onChange={(e) => setAdminNewPw(e.target.value)} className="h-8 max-w-[200px]" autoComplete="new-password" />
+                        <Input type="password" value={adminNewPw} onChange={(e) => setAdminNewPw(e.target.value)} className="h-8 max-w-xs" autoComplete="new-password" />
                       </div>
                     </div>
                     {pwError && <p className="text-xs text-destructive">{pwError}</p>}
