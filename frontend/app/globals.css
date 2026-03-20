@@ -54,7 +54,11 @@
     @apply border-border;
   }
   body {
+    font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
     @apply bg-background text-foreground text-sm antialiased;
+  }
+  code, kbd, pre, samp, .font-mono {
+    font-family: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
   }
 }
 
