@@ -612,31 +612,33 @@ export default function ResultsPage() {
         {/* ── 对比 (Bar Chart) ── */}
         {activeView === "compare" && (
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-0">
               {leaderboard.length === 0 ? (
                 <TableEmpty icon={Medal} title="暂无评测结果" />
               ) : (
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={barData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis domain={[0, 1]} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: number) =>
-                        `${(value * 100).toFixed(1)}%`
-                      }
-                    />
-                    <Legend />
-                    {criterionNames.map((name, idx) => (
-                      <Bar
-                        key={name}
-                        dataKey={name}
-                        fill={BAR_COLORS[idx % BAR_COLORS.length]}
-                        radius={[2, 2, 0, 0]}
+                <div className="p-6">
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={barData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis domain={[0, 1]} tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(value: number) =>
+                          `${(value * 100).toFixed(1)}%`
+                        }
                       />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                      <Legend />
+                      {criterionNames.map((name, idx) => (
+                        <Bar
+                          key={name}
+                          dataKey={name}
+                          fill={BAR_COLORS[idx % BAR_COLORS.length]}
+                          radius={[2, 2, 0, 0]}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -645,10 +647,11 @@ export default function ResultsPage() {
         {/* ── 雷达图 ── */}
         {activeView === "radar" && (
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-0">
               {leaderboard.length === 0 ? (
                 <TableEmpty icon={Medal} title="暂无评测结果" />
               ) : (
+                <div className="p-6">
                 <ResponsiveContainer width="100%" height={400}>
                   <RadarChart data={radarData}>
                     <PolarGrid />
@@ -675,6 +678,7 @@ export default function ResultsPage() {
                     ))}
                   </RadarChart>
                 </ResponsiveContainer>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -683,11 +687,11 @@ export default function ResultsPage() {
         {/* ── 天梯榜 (Champion per criterion) ── */}
         {activeView === "champion" && (
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-0">
               {championData.length === 0 ? (
                 <TableEmpty icon={Medal} title="暂无评测结果" />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 p-6">
                   {championData.map((entry) => (
                     <div
                       key={entry.criterion}
@@ -720,8 +724,8 @@ export default function ResultsPage() {
         {/* ── 外部数据 ── */}
         {activeView === "external" && (
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between px-6 pt-6 pb-4">
                 <div>
                   <h3 className="text-sm font-semibold">外部基准测试数据</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
