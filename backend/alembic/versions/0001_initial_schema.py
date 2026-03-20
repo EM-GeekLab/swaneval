@@ -47,8 +47,8 @@ def upgrade() -> None:
         sa.Column("hashed_password", sa.String(), nullable=False),
         sa.Column("role", userrole_enum, nullable=False, server_default="viewer"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_users_username", "users", ["username"], unique=True)
     op.create_index("ix_users_email", "users", ["email"], unique=True)
@@ -67,12 +67,12 @@ def upgrade() -> None:
         sa.Column("size_bytes", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("row_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         # subscription auto-update fields
         sa.Column("auto_update", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("update_interval_hours", sa.Integer(), nullable=False, server_default=sa.text("24")),
-        sa.Column("last_synced_at", sa.DateTime(), nullable=True),
+        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("sync_status", sa.String(), nullable=False, server_default=""),
         sa.Column("hf_dataset_id", sa.String(), nullable=False, server_default=""),
         sa.Column("hf_subset", sa.String(), nullable=False, server_default=""),
@@ -90,7 +90,7 @@ def upgrade() -> None:
         sa.Column("file_path", sa.String(), nullable=False),
         sa.Column("changelog", sa.String(), nullable=False, server_default=""),
         sa.Column("row_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     # ── criteria ────────────────────────────────────────────────────────
@@ -101,8 +101,8 @@ def upgrade() -> None:
         sa.Column("type", criteriontype_enum, nullable=False),
         sa.Column("config_json", sa.String(), nullable=False, server_default="{}"),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_criteria_name", "criteria", ["name"])
 
@@ -119,8 +119,8 @@ def upgrade() -> None:
         sa.Column("description", sa.String(), nullable=False, server_default=""),
         sa.Column("model_name", sa.String(), nullable=False, server_default=""),
         sa.Column("max_tokens", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_llm_models_name", "llm_models", ["name"])
 
@@ -139,10 +139,10 @@ def upgrade() -> None:
         sa.Column("gpu_ids", sa.String(), nullable=False, server_default=""),
         sa.Column("env_vars", sa.String(), nullable=False, server_default=""),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("started_at", sa.DateTime(), nullable=True),
-        sa.Column("finished_at", sa.DateTime(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     # ── eval_subtasks ───────────────────────────────────────────────────
@@ -155,8 +155,8 @@ def upgrade() -> None:
         sa.Column("progress_pct", sa.Float(), nullable=False, server_default=sa.text("0.0")),
         sa.Column("last_completed_index", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("error_log", sa.String(), nullable=False, server_default=""),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     # ── eval_results ────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ def upgrade() -> None:
         sa.Column("latency_ms", sa.Float(), nullable=False, server_default=sa.text("0.0")),
         sa.Column("tokens_generated", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("first_token_ms", sa.Float(), nullable=False, server_default=sa.text("0.0")),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_eval_results_task_id", "eval_results", ["task_id"])
 
@@ -190,7 +190,7 @@ def upgrade() -> None:
         sa.Column("source_url", sa.String(), nullable=False, server_default=""),
         sa.Column("source_platform", sa.String(), nullable=False, server_default=""),
         sa.Column("notes", sa.String(), nullable=False, server_default=""),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_external_benchmarks_model_name", "external_benchmarks", ["model_name"])
 
