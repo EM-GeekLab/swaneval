@@ -188,6 +188,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                   setForm({ ...form, api_key: e.target.value })
                 }
                 placeholder="hf_..."
+                className="font-mono"
               />
             </PanelField>
           </>
@@ -238,6 +239,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                   setForm({ ...form, api_key: e.target.value })
                 }
                 placeholder="sk-..."
+                className="font-mono"
               />
             </PanelField>
           </>

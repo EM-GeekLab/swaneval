@@ -83,15 +83,22 @@ async def import_huggingface(
         logger.warning("datasets lib failed for %s: %s", repo, e)
 
     # ── Strategy 2: list repo + download best file ────────────────
+    # Run blocking HF API calls in a thread so asyncio loop stays free
+    # for SSE progress streaming.
+    import asyncio
+
     try:
         from huggingface_hub import hf_hub_download, list_repo_files
 
         prog("downloading", "正在查找数据文件...", 0.2)
-        all_files = list_repo_files(
-            repo, repo_type="dataset", token=token,
-        )
 
-        # Score and rank candidate files
+        def _list_files():
+            return list_repo_files(
+                repo, repo_type="dataset", token=token,
+            )
+
+        all_files = await asyncio.to_thread(_list_files)
+
         target = _pick_best_file(all_files, subset, split)
         if not target:
             raise ValueError(
@@ -99,12 +106,16 @@ async def import_huggingface(
             )
 
         prog("downloading", f"正在下载 {target}...", 0.4)
-        local_path = hf_hub_download(
-            repo_id=repo,
-            filename=target,
-            repo_type="dataset",
-            token=token,
-        )
+
+        def _download():
+            return hf_hub_download(
+                repo_id=repo,
+                filename=target,
+                repo_type="dataset",
+                token=token,
+            )
+
+        local_path = await asyncio.to_thread(_download)
         prog("processing", "正在处理文件...", 0.8)
         result = await _store_downloaded_file(storage, local_path, repo)
         prog("done", "完成", 1.0)

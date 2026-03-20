@@ -322,7 +322,7 @@ export default function AdminPage() {
                                 t.set("");
                               } catch { /* ignore */ }
                             }}
-                            className="h-7 mt-0.5 max-w-xs text-xs"
+                            className="h-7 mt-0.5 max-w-xs text-xs font-mono"
                             placeholder={t.masked || "未配置"}
                           />
                         </div>
@@ -330,8 +330,14 @@ export default function AdminPage() {
                     </>
                   ) : (
                     <>
-                      <DetailField label="HuggingFace" value={selectedUser.hf_token_masked || "未配置"} />
-                      <DetailField label="ModelScope" value={selectedUser.ms_token_masked || "未配置"} />
+                      <div>
+                        <dt className="text-xs font-medium text-muted-foreground">HuggingFace</dt>
+                        <dd className="text-sm mt-0.5 font-mono">{selectedUser.hf_token_masked || "未配置"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-muted-foreground">ModelScope</dt>
+                        <dd className="text-sm mt-0.5 font-mono">{selectedUser.ms_token_masked || "未配置"}</dd>
+                      </div>
                     </>
                   )}
                 </div>

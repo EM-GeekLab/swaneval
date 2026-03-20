@@ -185,7 +185,7 @@ export default function AccountPage() {
                 type="password"
                 value={hfToken}
                 onChange={(e) => setHfToken(e.target.value)}
-                className="h-9 max-w-xs"
+                className="h-9 max-w-xs font-mono"
                 placeholder={tokenStatus?.hf_token_set ? "已设置，输入新值替换" : "hf_..."}
               />
             </div>
@@ -201,7 +201,7 @@ export default function AccountPage() {
                 type="password"
                 value={msToken}
                 onChange={(e) => setMsToken(e.target.value)}
-                className="h-9 max-w-xs"
+                className="h-9 max-w-xs font-mono"
                 placeholder={tokenStatus?.ms_token_set ? "已设置，输入新值替换" : "输入 ModelScope Token"}
               />
             </div>
