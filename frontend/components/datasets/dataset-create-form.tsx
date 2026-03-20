@@ -55,6 +55,10 @@ interface DatasetCreateFormProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Externally set import form values (e.g. from preset selection) */
   importFormOverride?: ImportFormState | null;
+  /** Track import in the progress hub */
+  onImportStart?: (name: string, source: string) => string;
+  onImportDone?: (jobId: string) => void;
+  onImportFail?: (jobId: string, error: string) => void;
 }
 
 export function DatasetCreateForm({
@@ -63,6 +67,9 @@ export function DatasetCreateForm({
   onTabChange,
   onDirtyChange,
   importFormOverride,
+  onImportStart,
+  onImportDone,
+  onImportFail,
 }: DatasetCreateFormProps) {
   const upload = useUploadDataset();
   const mount = useMountDataset();
@@ -174,6 +181,9 @@ export function DatasetCreateForm({
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
     setOnlineImportError("");
+    const displayName = importForm.name || importForm.dataset_id;
+    const source = importForm.source === "huggingface" ? "HuggingFace" : "ModelScope";
+    const jobId = onImportStart?.(displayName, source);
     try {
       await importDs.mutateAsync({
         source: importForm.source,
@@ -184,12 +194,13 @@ export function DatasetCreateForm({
         description: importForm.description || undefined,
         tags: importForm.tags || undefined,
       });
+      if (jobId) onImportDone?.(jobId);
       setImportForm({ ...emptyImportForm });
       onSuccess();
     } catch (err: unknown) {
-      setOnlineImportError(
-        extractErrorDetail(err, "导入失败，请检查数据集 ID 是否正确"),
-      );
+      const msg = extractErrorDetail(err, "导入失败，请检查数据集 ID 是否正确");
+      if (jobId) onImportFail?.(jobId, msg);
+      setOnlineImportError(msg);
     }
   };
 

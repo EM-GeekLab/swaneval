@@ -51,6 +51,8 @@ import { DatasetDetailPanel } from "@/components/datasets/dataset-detail-panel";
 import { DatasetCreateForm, type ImportFormState } from "@/components/datasets/dataset-create-form";
 import { DatasetPreviewDialog } from "@/components/datasets/dataset-preview-dialog";
 import { getDatasetColumns } from "@/components/datasets/dataset-table-columns";
+import { ImportProgressHub } from "@/components/import-progress-hub";
+import { useImportJobs } from "@/lib/stores/import-jobs";
 
 const sourceTypeLabel: Record<string, string> = {
   upload: "上传",
@@ -88,8 +90,8 @@ export default function DatasetsPage() {
   const [formDirty, setFormDirty] = useState(false);
   const [importFormOverride, setImportFormOverride] = useState<ImportFormState | null>(null);
   const [presetSelected, setPresetSelected] = useState<string[]>([]);
-  const [importingPresets, setImportingPresets] = useState<Set<string>>(new Set());
   const [onlineImportError, setOnlineImportError] = useState("");
+  const { jobs: importJobs, addJob, updateJob } = useImportJobs();
   const [shakeCancel, setShakeCancel] = useState(false);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [createPos, setCreatePos] = useState<{ top: number; right: number } | null>(null);
@@ -176,20 +178,23 @@ export default function DatasetsPage() {
           })),
         ]}
         action={
-          <Button
-            ref={addBtnRef}
-            size="sm"
-            onClick={isCreating ? closePanel : openCreate}
-            variant={isCreating ? "destructive" : "default"}
-            className={`${isCreating ? "relative z-[60]" : ""} ${shakeCancel ? "animate-shake" : ""}`}
-            onAnimationEnd={() => setShakeCancel(false)}
-          >
-            {isCreating ? (
-              <><X className="mr-1 h-4 w-4" /> 取消</>
-            ) : (
-              <><Plus className="mr-1 h-4 w-4" /> 添加数据集</>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <ImportProgressHub />
+            <Button
+              ref={addBtnRef}
+              size="sm"
+              onClick={isCreating ? closePanel : openCreate}
+              variant={isCreating ? "destructive" : "default"}
+              className={`${isCreating ? "relative z-[60]" : ""} ${shakeCancel ? "animate-shake" : ""}`}
+              onAnimationEnd={() => setShakeCancel(false)}
+            >
+              {isCreating ? (
+                <><X className="mr-1 h-4 w-4" /> 取消</>
+              ) : (
+                <><Plus className="mr-1 h-4 w-4" /> 添加数据集</>
+              )}
+            </Button>
+          </div>
         }
       />
 
@@ -363,25 +368,24 @@ export default function DatasetsPage() {
               done: (datasetsData?.items ?? []).some(
                 (d) => d.name === p.name && d.row_count > 0,
               ),
-              importing: importingPresets.has(p.hf_id),
+              importing: importJobs.some(
+                (j) => j.id === p.hf_id && j.status === "importing",
+              ),
             }))}
             selected={presetSelected}
             onSelectionChange={setPresetSelected}
             onConfirm={async (keys) => {
               setOnlineImportError("");
-              // Mark all as importing (non-blocking)
-              setImportingPresets((prev) => {
-                const next = new Set(prev);
-                keys.forEach((k) => next.add(k));
-                return next;
-              });
               setPresetSelected([]);
-              // Import sequentially but don't block UI
+              // Fire all imports — each tracked in the progress hub
               for (const key of keys) {
                 const p = presets.find((x) => x.hf_id === key);
                 if (!p) continue;
-                try {
-                  await importDs.mutateAsync({
+                const jobId = p.hf_id;
+                addJob({ id: jobId, name: p.name, source: "HuggingFace 预设" });
+                // Don't await — fire and forget, the hub tracks it
+                importDs
+                  .mutateAsync({
                     source: "huggingface",
                     dataset_id: p.hf_id,
                     name: p.name,
@@ -389,16 +393,17 @@ export default function DatasetsPage() {
                     split: p.split,
                     description: p.description,
                     tags: p.tags,
+                  })
+                  .then(() => {
+                    updateJob(jobId, { status: "done", finishedAt: Date.now() });
+                  })
+                  .catch((err: unknown) => {
+                    updateJob(jobId, {
+                      status: "failed",
+                      finishedAt: Date.now(),
+                      error: extractErrorDetail(err, "导入失败"),
+                    });
                   });
-                } catch (err: unknown) {
-                  setOnlineImportError(extractErrorDetail(err, `导入 ${p.name} 失败`));
-                } finally {
-                  setImportingPresets((prev) => {
-                    const next = new Set(prev);
-                    next.delete(key);
-                    return next;
-                  });
-                }
               }
             }}
             confirmLabel="下载导入"
@@ -413,6 +418,13 @@ export default function DatasetsPage() {
           onTabChange={setCreateTab}
           onDirtyChange={handleDirtyChange}
           importFormOverride={importFormOverride}
+          onImportStart={(name, source) => {
+            const id = `custom-${Date.now()}`;
+            addJob({ id, name, source });
+            return id;
+          }}
+          onImportDone={(id) => updateJob(id, { status: "done", finishedAt: Date.now() })}
+          onImportFail={(id, error) => updateJob(id, { status: "failed", finishedAt: Date.now(), error })}
         />
       </CreateModal>
 
