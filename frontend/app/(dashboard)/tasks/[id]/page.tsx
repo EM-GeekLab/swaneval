@@ -107,11 +107,11 @@ export default function TaskDetailPage() {
   }));
 
   const barColors = [
-    "#7B4BFF", // primary
+    "#7C3AED", // primary
     "#10b981", // success
     "#f59e0b", // warning
     "#dc2626", // error
-    "#9b6dff", // accent
+    "#8B5CF6", // accent
     "#ec4899", // pink
   ];
 

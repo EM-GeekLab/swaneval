@@ -62,7 +62,7 @@ export function Topbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-150 whitespace-nowrap",
+                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-all duration-150 whitespace-nowrap",
                   active
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-base-content/40 hover:bg-base-300/30 hover:text-base-content"

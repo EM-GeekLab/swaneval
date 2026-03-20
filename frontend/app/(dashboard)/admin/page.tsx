@@ -20,9 +20,11 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
 import { extractErrorDetail } from "@/lib/utils";
-import { useUsers, useUpdateUser, useDeleteUser } from "@/lib/hooks/use-users";
+import { useUsers, useUpdateUser, useDeleteUser, useChangePassword } from "@/lib/hooks/use-users";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { utc } from "@/lib/utils";
@@ -49,8 +51,13 @@ export default function AdminPage() {
   const { data: users = [], isLoading } = useUsers();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+  const changePassword = useChangePassword();
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [adminOldPw, setAdminOldPw] = useState("");
+  const [adminNewPw, setAdminNewPw] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+  const [pwError, setPwError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -292,10 +299,39 @@ export default function AdminPage() {
 
                 {/* Actions */}
                 {selectedUser.role === "admin" ? (
-                  <div className="pt-4 border-t">
-                    <span className="text-xs text-base-content/30">
-                      受保护
-                    </span>
+                  <div className="pt-4 border-t space-y-3">
+                    <p className="text-xs font-medium text-base-content/60">修改密码</p>
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">旧密码</Label>
+                        <Input type="password" value={adminOldPw} onChange={(e) => setAdminOldPw(e.target.value)} className="h-8" autoComplete="current-password" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">新密码</Label>
+                        <Input type="password" value={adminNewPw} onChange={(e) => setAdminNewPw(e.target.value)} className="h-8" autoComplete="new-password" />
+                      </div>
+                    </div>
+                    {pwError && <p className="text-xs text-error">{pwError}</p>}
+                    {pwSuccess && <p className="text-xs text-success">{pwSuccess}</p>}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={changePassword.isPending || !adminOldPw || !adminNewPw}
+                      onClick={async () => {
+                        setPwError(""); setPwSuccess("");
+                        try {
+                          await changePassword.mutateAsync({ old_password: adminOldPw, new_password: adminNewPw });
+                          setPwSuccess("密码修改成功");
+                          setAdminOldPw(""); setAdminNewPw("");
+                          setTimeout(() => setPwSuccess(""), 3000);
+                        } catch (err: unknown) {
+                          setPwError(extractErrorDetail(err, "密码修改失败"));
+                        }
+                      }}
+                    >
+                      {changePassword.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      修改密码
+                    </Button>
                   </div>
                 ) : (
                   <div className="pt-4 border-t space-y-4">

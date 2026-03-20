@@ -6,18 +6,22 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const variantMap: Record<string, string> = {
-  default: "badge-primary badge-soft",
-  secondary: "badge-secondary",
-  destructive: "badge-error badge-soft",
-  outline: "badge-outline",
-  success: "badge-success badge-soft",
-  warning: "badge-warning badge-soft",
+  default: "bg-primary/10 text-primary",
+  secondary: "bg-base-300/60 text-base-content/70",
+  destructive: "bg-error/10 text-error",
+  outline: "border border-base-300 text-base-content/70",
+  success: "bg-success/10 text-success",
+  warning: "bg-warning/10 text-warning",
 };
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {
   return (
     <div
-      className={cn("badge badge-sm font-medium", variantMap[variant], className)}
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        variantMap[variant],
+        className,
+      )}
       {...props}
     />
   );

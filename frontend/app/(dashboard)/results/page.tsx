@@ -84,11 +84,11 @@ import { SegmentedControl } from "@/components/segmented-control";
 
 /** Chart palette — primary first, then complementary hues */
 const BAR_COLORS = [
-  "#7B4BFF", // primary
+  "#7C3AED", // primary
   "#10b981", // success (emerald)
   "#f59e0b", // warning (amber)
   "#dc2626", // error (red)
-  "#9b6dff", // accent
+  "#8B5CF6", // accent
   "#ec4899", // pink
   "#06b6d4", // cyan
 ];
@@ -547,9 +547,9 @@ export default function ResultsPage() {
               key={item.key}
               onClick={() => setActiveView(item.key)}
               className={cn(
-                "flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm transition-all",
+                "flex items-center gap-2 w-full rounded-full px-3 py-2 text-sm transition-all",
                 activeView === item.key
-                  ? "bg-base-300/50 text-base-content font-medium"
+                  ? "bg-primary/10 text-primary font-medium"
                   : "text-base-content/40 hover:bg-base-300/30 hover:text-base-content",
               )}
             >

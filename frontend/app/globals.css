@@ -58,7 +58,7 @@ code, kbd, pre, samp, .font-mono {
   height: 60%;
   top: -10%;
   left: -10%;
-  background: radial-gradient(circle, #7B4BFF 0%, transparent 70%);
+  background: radial-gradient(circle, #7C3AED 0%, transparent 70%);
   animation: blob-drift-1 20s ease-in-out infinite;
 }
 
@@ -67,7 +67,7 @@ code, kbd, pre, samp, .font-mono {
   height: 50%;
   bottom: -5%;
   right: -5%;
-  background: radial-gradient(circle, #9b6dff 0%, transparent 70%);
+  background: radial-gradient(circle, #8B5CF6 0%, transparent 70%);
   animation: blob-drift-2 25s ease-in-out infinite;
 }
 
@@ -103,7 +103,7 @@ code, kbd, pre, samp, .font-mono {
   height: 130%;
   top: -40%;
   left: -10%;
-  background: radial-gradient(circle, #7B4BFF 0%, transparent 65%);
+  background: radial-gradient(circle, #7C3AED 0%, transparent 65%);
   animation: blob-drift-1 22s ease-in-out infinite;
 }
 
@@ -112,7 +112,7 @@ code, kbd, pre, samp, .font-mono {
   height: 110%;
   bottom: -25%;
   right: -5%;
-  background: radial-gradient(circle, #9b6dff 0%, transparent 65%);
+  background: radial-gradient(circle, #8B5CF6 0%, transparent 65%);
   animation: blob-drift-2 28s ease-in-out infinite;
 }
 
