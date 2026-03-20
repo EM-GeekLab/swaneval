@@ -7,24 +7,24 @@ services:
 
   postgres:
     image: postgres:14
-    container_name: evalscope-postgres
+    container_name: swaneval-postgres
     environment:
-      POSTGRES_USER: evalscope
-      POSTGRES_PASSWORD: evalscope
-      POSTGRES_DB: evalscope
+      POSTGRES_USER: swaneval
+      POSTGRES_PASSWORD: swaneval
+      POSTGRES_DB: swaneval
     ports:
       - "${PG_PORT:-6001}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evalscope"]
+      test: ["CMD-SHELL", "pg_isready -U swaneval"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: evalscope-redis
+    container_name: swaneval-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -39,14 +39,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: evalscope-backend
+    container_name: swaneval-backend
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
-      - evalscope_data:/data
+      - swaneval_data:/data
     environment:
-      DATABASE_URL: "postgresql+asyncpg://evalscope:evalscope@postgres:5432/evalscope"
-      DATABASE_URL_SYNC: "postgresql://evalscope:evalscope@postgres:5432/evalscope"
+      DATABASE_URL: "postgresql+asyncpg://swaneval:swaneval@postgres:5432/swaneval"
+      DATABASE_URL_SYNC: "postgresql://swaneval:swaneval@postgres:5432/swaneval"
       REDIS_URL: "redis://redis:6379/0"
       CORS_ORIGINS: '["*"]'
       STORAGE_BACKEND: local
@@ -62,7 +62,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: evalscope-frontend
+    container_name: swaneval-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -75,7 +75,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: evalscope-ollama
+    container_name: swaneval-ollama
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
@@ -85,7 +85,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: evalscope-minio
+    container_name: swaneval-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -105,6 +105,6 @@ services:
 
 volumes:
   postgres_data:
-  evalscope_data:
+  swaneval_data:
   ollama_data:
   minio_data:

@@ -1,4 +1,4 @@
-# EvalScope GUI
+# SwanEVAL
 
 Enterprise LLM evaluation platform. Manage datasets, define evaluation criteria, run evaluation tasks across models, and analyze results with charts/reports.
 
@@ -31,7 +31,7 @@ pnpm dev  # localhost:3000
 
 **Env vars** (backend `.env`):
 ```
-DATABASE_URL=postgresql://evalscope:evalscope@localhost:6001/evalscope
+DATABASE_URL=postgresql://swaneval:swaneval@localhost:6001/swaneval
 REDIS_URL=redis://localhost:6379/0
 CORS_ORIGINS=["http://localhost:3000"]
 ```

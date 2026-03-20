@@ -88,8 +88,8 @@ pnpm dev
 后端从 `backend/.env` 读取配置：
 
 ```env
-DATABASE_URL=postgresql+asyncpg://evalscope:evalscope@localhost:6001/evalscope
-DATABASE_URL_SYNC=postgresql://evalscope:evalscope@localhost:6001/evalscope
+DATABASE_URL=postgresql+asyncpg://swaneval:swaneval@localhost:6001/swaneval
+DATABASE_URL_SYNC=postgresql://swaneval:swaneval@localhost:6001/swaneval
 REDIS_URL=redis://localhost:6379/0
 CORS_ORIGINS=["http://localhost:3000"]
 SECRET_KEY=dev-secret-change-in-production
