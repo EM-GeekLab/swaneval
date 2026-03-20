@@ -775,11 +775,11 @@ export default function ResultsPage() {
           <Card>
             <CardContent className="p-0">
               {/* Controls */}
-              <div className="flex items-center gap-3 flex-wrap px-4 py-3">
+              <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-b">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground shrink-0">任务</span>
                   <Select value={reportTaskId} onValueChange={setReportTaskId}>
-                    <SelectTrigger className="h-9 w-[200px]">
+                    <SelectTrigger className="h-9 max-w-xs">
                       <SelectValue placeholder="选择任务..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -1001,7 +1001,7 @@ export default function ResultsPage() {
           <Card>
             <CardContent className="p-0">
               {/* Task filter bar */}
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex items-center gap-3 px-4 py-3 border-b">
                 <span className="text-xs text-muted-foreground shrink-0">任务</span>
                 <Select
                   value={detailTaskId}
