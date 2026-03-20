@@ -41,7 +41,8 @@ export default function OverviewPage() {
   const completedCount = allTasks.filter((t) => t.status === "completed").length;
   const pendingCount = allTasks.filter((t) => t.status === "pending").length;
   const totalCount = allTasks.length;
-  const successRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const hasData = totalCount > 0;
+  const successRate = hasData ? Math.round((completedCount / totalCount) * 100) : null;
   const topModel = leaderboard.length > 0 ? leaderboard[0] : null;
   const datasetCount =
     (datasets.data as { total?: number })?.total ??
@@ -78,12 +79,12 @@ export default function OverviewPage() {
       {/* ── Hero: centered title + subtle metrics ── */}
       <div className="relative z-10 flex flex-col items-center justify-center pt-12 pb-6 px-6">
         <h1 className="text-3xl font-bold tracking-tight mb-1">SwanEVAL</h1>
-        <p className="text-sm text-base-content/50">
+        <p className="text-sm text-base-content/40">
           企业级大模型评测平台
         </p>
 
         {/* Status strip */}
-        <div className="flex items-center gap-4 mt-5 text-xs text-base-content/50">
+        <div className="flex items-center gap-4 mt-5 text-xs text-base-content/40">
           {runningCount > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-1.5 w-1.5">
@@ -126,7 +127,7 @@ export default function OverviewPage() {
             <Link
               key={m.label}
               href={m.href}
-              className="group flex items-center gap-2 text-base-content/50 hover:text-base-content transition-colors"
+              className="group flex items-center gap-2 text-base-content/40 hover:text-base-content transition-colors"
             >
               <m.icon className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
               <span className="text-lg font-semibold tabular-nums text-base-content">{m.value}</span>
@@ -148,16 +149,25 @@ export default function OverviewPage() {
             </div>
             <Link
               href="/tasks"
-              className="text-[11px] text-base-content/50 hover:text-base-content flex items-center gap-0.5 transition-colors"
+              className="text-[11px] text-base-content/40 hover:text-base-content flex items-center gap-0.5 transition-colors"
             >
               查看 <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          {/* Success rate — large number */}
+          {/* Success rate — large number or placeholder */}
           <div className="flex-1 flex flex-col items-center justify-center">
-            <p className="text-5xl font-bold tabular-nums text-primary">{successRate}%</p>
-            <p className="text-xs text-base-content/50 mt-1">成功率</p>
+            {successRate !== null ? (
+              <>
+                <p className="text-5xl font-bold tabular-nums text-primary">{successRate}%</p>
+                <p className="text-xs text-base-content/40 mt-1">成功率</p>
+              </>
+            ) : (
+              <>
+                <p className="text-5xl font-bold tabular-nums text-base-content/15">—</p>
+                <p className="text-xs text-base-content/25 mt-1">暂无任务</p>
+              </>
+            )}
 
             {/* Segmented bar */}
             {taskSegments.length > 0 && (
@@ -171,7 +181,7 @@ export default function OverviewPage() {
                     />
                   ))}
                 </div>
-                <div className="flex items-center justify-center gap-4 text-[10px] text-base-content/50">
+                <div className="flex items-center justify-center gap-4 text-[10px] text-base-content/40">
                   {taskSegments.map((seg) => (
                     <div key={seg.label} className="flex items-center gap-1">
                       <div className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
@@ -181,10 +191,6 @@ export default function OverviewPage() {
                 </div>
               </div>
             )}
-
-            {totalCount === 0 && (
-              <p className="text-xs text-base-content/30 mt-4 italic">暂无任务数据</p>
-            )}
           </div>
         </div>
 
@@ -192,12 +198,12 @@ export default function OverviewPage() {
         <div className="col-span-5 rounded-2xl border border-base-300/40 bg-base-100/40 backdrop-blur-sm p-5 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-base-content/50" />
+              <BarChart3 className="h-4 w-4 text-base-content/40" />
               <span className="text-sm font-medium">模型得分分布</span>
             </div>
             <Link
               href="/results"
-              className="text-[11px] text-base-content/50 hover:text-base-content flex items-center gap-0.5 transition-colors"
+              className="text-[11px] text-base-content/40 hover:text-base-content flex items-center gap-0.5 transition-colors"
             >
               排行榜 <ArrowRight className="h-3 w-3" />
             </Link>
@@ -207,7 +213,7 @@ export default function OverviewPage() {
             <div className="flex-1 flex items-end gap-1.5 pb-2">
               {scoreBars.map((score, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] tabular-nums text-base-content/50">
+                  <span className="text-[9px] tabular-nums text-base-content/40">
                     {(score * 100).toFixed(0)}
                   </span>
                   <div
@@ -219,8 +225,8 @@ export default function OverviewPage() {
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-2">
-              <BarChart3 className="h-8 w-8 text-base-content/15" />
-              <p className="text-xs text-base-content/30">暂无评测数据</p>
+              <BarChart3 className="h-8 w-8 text-base-content/10" />
+              <p className="text-xs text-base-content/25">暂无评测数据</p>
             </div>
           )}
         </div>
@@ -239,12 +245,12 @@ export default function OverviewPage() {
                   <span className="text-xs font-medium text-amber-600">运行中</span>
                 </div>
                 <p className="text-3xl font-bold tabular-nums">{runningCount}</p>
-                <p className="text-[10px] text-base-content/50 mt-0.5">个任务</p>
+                <p className="text-[10px] text-base-content/40 mt-0.5">个任务</p>
               </div>
             ) : (
               <div className="text-center">
-                <CheckCircle2 className="h-5 w-5 text-base-content/20 mx-auto mb-1.5" />
-                <p className="text-xs text-base-content/30">队列空闲</p>
+                <CheckCircle2 className="h-5 w-5 text-base-content/15 mx-auto mb-1.5" />
+                <p className="text-xs text-base-content/25">队列空闲</p>
               </div>
             )}
           </div>
@@ -255,14 +261,14 @@ export default function OverviewPage() {
               <Link href="/tasks" className="text-center group">
                 <AlertTriangle className="h-5 w-5 text-error/60 mx-auto mb-1.5" />
                 <p className="text-3xl font-bold tabular-nums text-error">{failedCount}</p>
-                <p className="text-[10px] text-base-content/50 mt-0.5 group-hover:text-base-content transition-colors">
+                <p className="text-[10px] text-base-content/40 mt-0.5 group-hover:text-base-content transition-colors">
                   失败任务 <ArrowRight className="inline h-2.5 w-2.5" />
                 </p>
               </Link>
             ) : (
               <div className="text-center">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500/40 mx-auto mb-1.5" />
-                <p className="text-xs text-base-content/30">无异常</p>
+                <CheckCircle2 className="h-5 w-5 text-success/30 mx-auto mb-1.5" />
+                <p className="text-xs text-base-content/25">无异常</p>
               </div>
             )}
           </div>
@@ -270,7 +276,7 @@ export default function OverviewPage() {
       </div>
 
       {/* App info */}
-      <div className="relative z-10 shrink-0 flex items-center justify-center gap-1.5 pb-3 text-[11px] text-base-content/30">
+      <div className="relative z-10 shrink-0 flex items-center justify-center gap-1.5 pb-3 text-[11px] text-base-content/25">
         <span>SwanEVAL</span>
         <span className="font-mono">v{process.env.NEXT_PUBLIC_APP_VERSION}{process.env.NEXT_PUBLIC_BUILD_HASH ? `-${process.env.NEXT_PUBLIC_BUILD_HASH}` : ''}</span>
       </div>

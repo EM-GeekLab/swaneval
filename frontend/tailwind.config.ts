@@ -30,8 +30,8 @@ module.exports = {
         },
         "shake": {
           "0%, 100%": { transform: "translateX(0)" },
-          "15%, 55%": { transform: "translateX(-5px)" },
-          "35%, 75%": { transform: "translateX(5px)" },
+          "10%, 50%, 90%": { transform: "translateX(-8px)" },
+          "30%, 70%": { transform: "translateX(8px)" },
         },
         "backdrop-in": {
           from: { opacity: "0" },

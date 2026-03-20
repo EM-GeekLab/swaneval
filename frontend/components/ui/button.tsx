@@ -11,10 +11,10 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantClasses: Record<string, string> = {
   default: "bg-primary text-primary-content hover:brightness-110 shadow-sm",
-  destructive: "bg-error text-error-content hover:brightness-110 shadow-sm",
-  outline: "border border-base-300 bg-base-100 hover:bg-base-200 text-base-content",
-  secondary: "bg-base-200 text-base-content hover:bg-base-300",
-  ghost: "hover:bg-base-200 text-base-content",
+  destructive: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
+  outline: "border border-base-300 bg-base-200/60 hover:bg-base-300/60 text-base-content",
+  secondary: "bg-base-300/50 text-base-content hover:bg-base-300",
+  ghost: "hover:bg-base-300/50 text-base-content",
   link: "text-primary underline-offset-4 hover:underline",
 };
 

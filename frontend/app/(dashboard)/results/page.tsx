@@ -549,8 +549,8 @@ export default function ResultsPage() {
               className={cn(
                 "flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm transition-all",
                 activeView === item.key
-                  ? "bg-base-100 text-base-content font-medium shadow-sm"
-                  : "text-base-content/40 hover:bg-base-200/50 hover:text-base-content",
+                  ? "bg-base-300/50 text-base-content font-medium"
+                  : "text-base-content/40 hover:bg-base-300/30 hover:text-base-content",
               )}
             >
               <item.icon className="h-4 w-4" />

@@ -26,20 +26,38 @@ export function CreateModal({
   children,
   sidePanel,
 }: CreateModalProps) {
+  // ESC key handler
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (formDirty) {
+          onShake();
+        } else {
+          onClose();
+        }
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, formDirty, onClose, onShake]);
+
   if (!open || !position) return null;
+
+  const handleBackdropClick = () => {
+    if (formDirty) {
+      onShake();
+      return;
+    }
+    onClose();
+  };
 
   return (
     <>
       {createPortal(
         <div
           className="fixed inset-0 bg-black/40 z-50 animate-backdrop-in"
-          onClick={() => {
-            if (formDirty) {
-              onShake();
-              return;
-            }
-            onClose();
-          }}
+          onClick={handleBackdropClick}
         />,
         document.body,
       )}
