@@ -272,7 +272,7 @@ export default function OverviewPage() {
       {/* App info */}
       <div className="relative z-10 shrink-0 flex items-center justify-center gap-1.5 pb-3 text-[11px] text-muted-foreground/40">
         <span>SwanEVAL</span>
-        <span>v{process.env.NEXT_PUBLIC_APP_VERSION}{process.env.NEXT_PUBLIC_BUILD_HASH ? `-${process.env.NEXT_PUBLIC_BUILD_HASH}` : ''}</span>
+        <span className="font-mono">v{process.env.NEXT_PUBLIC_APP_VERSION}{process.env.NEXT_PUBLIC_BUILD_HASH ? `-${process.env.NEXT_PUBLIC_BUILD_HASH}` : ''}</span>
       </div>
     </div>
   );

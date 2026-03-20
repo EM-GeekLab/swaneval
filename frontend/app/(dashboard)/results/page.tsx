@@ -773,9 +773,9 @@ export default function ResultsPage() {
         {/* ── 报告生成器 ── */}
         <TabsContent value="reports">
           <Card>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="p-0">
               {/* Controls */}
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground shrink-0">任务</span>
                   <Select value={reportTaskId} onValueChange={setReportTaskId}>
@@ -830,7 +830,7 @@ export default function ResultsPage() {
               ) : !reportData ? (
                 <TableEmpty title="暂无数据" />
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 px-4 pb-4">
                   {/* Report header */}
                   <div className="border-b pb-3">
                     <h3 className="text-base font-semibold">{String(reportData.title)}</h3>
@@ -1002,9 +1002,7 @@ export default function ResultsPage() {
             <CardContent className="p-0">
               {/* Task filter bar */}
               <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-xs text-muted-foreground shrink-0">
-                  任务筛选
-                </span>
+                <span className="text-xs text-muted-foreground shrink-0">任务</span>
                 <Select
                   value={detailTaskId}
                   onValueChange={(v) => {

@@ -22,7 +22,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex h-9 items-center rounded-xl bg-muted p-1 text-muted-foreground",
+        "inline-flex h-9 items-center rounded-full bg-muted p-1 text-muted-foreground",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export function SegmentedControl<T extends string>({
           type="button"
           onClick={() => onChange(option.key)}
           className={cn(
-            "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1 text-xs font-medium transition-all",
+            "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-all",
             value === option.key
               ? "bg-background text-foreground shadow-sm"
               : "hover:text-foreground",
