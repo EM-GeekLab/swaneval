@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -17,27 +18,26 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# ── Enum types ──────────────────────────────────────────────────────────
-userrole_enum = sa.Enum("admin", "data_admin", "engineer", "viewer", name="userrole")
-sourcetype_enum = sa.Enum("upload", "huggingface", "modelscope", "server_path", "preset", name="sourcetype")
-criteriontype_enum = sa.Enum("preset", "regex", "script", "llm_judge", name="criteriontype")
-modeltype_enum = sa.Enum("api", "local", "huggingface", name="modeltype")
-apiformat_enum = sa.Enum("openai", "anthropic", name="apiformat")
-taskstatus_enum = sa.Enum("pending", "running", "paused", "completed", "failed", name="taskstatus")
-seedstrategy_enum = sa.Enum("fixed", "random", name="seedstrategy")
-
 
 def upgrade() -> None:
-    # ── Create enum types ───────────────────────────────────────────────
-    userrole_enum.create(op.get_bind(), checkfirst=True)
-    sourcetype_enum.create(op.get_bind(), checkfirst=True)
-    criteriontype_enum.create(op.get_bind(), checkfirst=True)
-    modeltype_enum.create(op.get_bind(), checkfirst=True)
-    apiformat_enum.create(op.get_bind(), checkfirst=True)
-    taskstatus_enum.create(op.get_bind(), checkfirst=True)
-    seedstrategy_enum.create(op.get_bind(), checkfirst=True)
+    # ── Create enum types (idempotent) ────────────────────────────────
+    userrole = postgresql.ENUM("admin", "data_admin", "engineer", "viewer", name="userrole", create_type=False)
+    sourcetype = postgresql.ENUM("upload", "huggingface", "modelscope", "server_path", "preset", name="sourcetype", create_type=False)
+    criteriontype = postgresql.ENUM("preset", "regex", "script", "llm_judge", name="criteriontype", create_type=False)
+    modeltype = postgresql.ENUM("api", "local", "huggingface", name="modeltype", create_type=False)
+    apiformat = postgresql.ENUM("openai", "anthropic", name="apiformat", create_type=False)
+    taskstatus = postgresql.ENUM("pending", "running", "paused", "completed", "failed", name="taskstatus", create_type=False)
+    seedstrategy = postgresql.ENUM("fixed", "random", name="seedstrategy", create_type=False)
 
-    # ── users ───────────────────────────────────────────────────────────
+    userrole.create(op.get_bind(), checkfirst=True)
+    sourcetype.create(op.get_bind(), checkfirst=True)
+    criteriontype.create(op.get_bind(), checkfirst=True)
+    modeltype.create(op.get_bind(), checkfirst=True)
+    apiformat.create(op.get_bind(), checkfirst=True)
+    taskstatus.create(op.get_bind(), checkfirst=True)
+    seedstrategy.create(op.get_bind(), checkfirst=True)
+
+    # ── users ─────────────────────────────────────────────────────────
     op.create_table(
         "users",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -45,7 +45,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(256), nullable=False),
         sa.Column("nickname", sa.String(64), nullable=False, server_default=""),
         sa.Column("hashed_password", sa.String(), nullable=False),
-        sa.Column("role", userrole_enum, nullable=False, server_default="viewer"),
+        sa.Column("role", userrole, nullable=False, server_default="viewer"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -53,13 +53,13 @@ def upgrade() -> None:
     op.create_index("ix_users_username", "users", ["username"], unique=True)
     op.create_index("ix_users_email", "users", ["email"], unique=True)
 
-    # ── datasets ────────────────────────────────────────────────────────
+    # ── datasets ──────────────────────────────────────────────────────
     op.create_table(
         "datasets",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("description", sa.String(), nullable=False, server_default=""),
-        sa.Column("source_type", sourcetype_enum, nullable=False),
+        sa.Column("source_type", sourcetype, nullable=False),
         sa.Column("source_uri", sa.String(), nullable=False, server_default=""),
         sa.Column("format", sa.String(32), nullable=False, server_default="jsonl"),
         sa.Column("tags", sa.String(), nullable=False, server_default=""),
@@ -69,7 +69,6 @@ def upgrade() -> None:
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        # subscription auto-update fields
         sa.Column("auto_update", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("update_interval_hours", sa.Integer(), nullable=False, server_default=sa.text("24")),
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
@@ -81,7 +80,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_datasets_name", "datasets", ["name"])
 
-    # ── dataset_versions ────────────────────────────────────────────────
+    # ── dataset_versions ──────────────────────────────────────────────
     op.create_table(
         "dataset_versions",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -93,12 +92,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
 
-    # ── criteria ────────────────────────────────────────────────────────
+    # ── criteria ──────────────────────────────────────────────────────
     op.create_table(
         "criteria",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("name", sa.String(256), nullable=False),
-        sa.Column("type", criteriontype_enum, nullable=False),
+        sa.Column("type", criteriontype, nullable=False),
         sa.Column("config_json", sa.String(), nullable=False, server_default="{}"),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -106,7 +105,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_criteria_name", "criteria", ["name"])
 
-    # ── llm_models ──────────────────────────────────────────────────────
+    # ── llm_models ────────────────────────────────────────────────────
     op.create_table(
         "llm_models",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -114,8 +113,8 @@ def upgrade() -> None:
         sa.Column("provider", sa.String(64), nullable=False),
         sa.Column("endpoint_url", sa.String(), nullable=False),
         sa.Column("api_key", sa.String(), nullable=False, server_default=""),
-        sa.Column("model_type", modeltype_enum, nullable=False),
-        sa.Column("api_format", apiformat_enum, nullable=False, server_default="openai"),
+        sa.Column("model_type", modeltype, nullable=False),
+        sa.Column("api_format", apiformat, nullable=False, server_default="openai"),
         sa.Column("description", sa.String(), nullable=False, server_default=""),
         sa.Column("model_name", sa.String(), nullable=False, server_default=""),
         sa.Column("max_tokens", sa.Integer(), nullable=True),
@@ -124,18 +123,18 @@ def upgrade() -> None:
     )
     op.create_index("ix_llm_models_name", "llm_models", ["name"])
 
-    # ── eval_tasks ──────────────────────────────────────────────────────
+    # ── eval_tasks ────────────────────────────────────────────────────
     op.create_table(
         "eval_tasks",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("name", sa.String(256), nullable=False),
-        sa.Column("status", taskstatus_enum, nullable=False, server_default="pending"),
+        sa.Column("status", taskstatus, nullable=False, server_default="pending"),
         sa.Column("model_id", sa.Uuid(), sa.ForeignKey("llm_models.id"), nullable=False),
         sa.Column("dataset_ids", sa.String(), nullable=False, server_default=""),
         sa.Column("criteria_ids", sa.String(), nullable=False, server_default=""),
         sa.Column("params_json", sa.String(), nullable=False, server_default='{"temperature": 0.7, "max_tokens": 1024}'),
         sa.Column("repeat_count", sa.Integer(), nullable=False, server_default=sa.text("1")),
-        sa.Column("seed_strategy", seedstrategy_enum, nullable=False, server_default="fixed"),
+        sa.Column("seed_strategy", seedstrategy, nullable=False, server_default="fixed"),
         sa.Column("gpu_ids", sa.String(), nullable=False, server_default=""),
         sa.Column("env_vars", sa.String(), nullable=False, server_default=""),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
@@ -145,13 +144,13 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
-    # ── eval_subtasks ───────────────────────────────────────────────────
+    # ── eval_subtasks ─────────────────────────────────────────────────
     op.create_table(
         "eval_subtasks",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("task_id", sa.Uuid(), sa.ForeignKey("eval_tasks.id"), nullable=False),
         sa.Column("run_index", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("status", taskstatus_enum, nullable=False, server_default="pending"),
+        sa.Column("status", taskstatus, nullable=False, server_default="pending"),
         sa.Column("progress_pct", sa.Float(), nullable=False, server_default=sa.text("0.0")),
         sa.Column("last_completed_index", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("error_log", sa.String(), nullable=False, server_default=""),
@@ -159,7 +158,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
-    # ── eval_results ────────────────────────────────────────────────────
+    # ── eval_results ──────────────────────────────────────────────────
     op.create_table(
         "eval_results",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -178,7 +177,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_eval_results_task_id", "eval_results", ["task_id"])
 
-    # ── external_benchmarks ─────────────────────────────────────────────
+    # ── external_benchmarks ───────────────────────────────────────────
     op.create_table(
         "external_benchmarks",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -196,7 +195,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # ── Drop tables in reverse dependency order ─────────────────────────
     op.drop_table("external_benchmarks")
     op.drop_table("eval_results")
     op.drop_table("eval_subtasks")
@@ -207,11 +205,5 @@ def downgrade() -> None:
     op.drop_table("datasets")
     op.drop_table("users")
 
-    # ── Drop enum types ─────────────────────────────────────────────────
-    seedstrategy_enum.drop(op.get_bind(), checkfirst=True)
-    taskstatus_enum.drop(op.get_bind(), checkfirst=True)
-    apiformat_enum.drop(op.get_bind(), checkfirst=True)
-    modeltype_enum.drop(op.get_bind(), checkfirst=True)
-    criteriontype_enum.drop(op.get_bind(), checkfirst=True)
-    sourcetype_enum.drop(op.get_bind(), checkfirst=True)
-    userrole_enum.drop(op.get_bind(), checkfirst=True)
+    for name in ("seedstrategy", "taskstatus", "apiformat", "modeltype", "criteriontype", "sourcetype", "userrole"):
+        postgresql.ENUM(name=name).drop(op.get_bind(), checkfirst=True)
