@@ -84,11 +84,11 @@ import { SegmentedControl } from "@/components/segmented-control";
 
 /** Chart palette — primary first, then complementary hues */
 const BAR_COLORS = [
-  "#6366f1", // primary (indigo)
+  "#7B4BFF", // primary
   "#10b981", // success (emerald)
   "#f59e0b", // warning (amber)
   "#dc2626", // error (red)
-  "#8b5cf6", // accent (violet)
+  "#9b6dff", // accent
   "#ec4899", // pink
   "#06b6d4", // cyan
 ];

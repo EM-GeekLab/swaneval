@@ -64,7 +64,7 @@ export function Topbar() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-150 whitespace-nowrap",
                   active
-                    ? "bg-base-300/50 text-base-content font-medium"
+                    ? "bg-primary/10 text-primary font-medium"
                     : "text-base-content/40 hover:bg-base-300/30 hover:text-base-content"
                 )}
               >

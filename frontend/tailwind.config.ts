@@ -51,11 +51,11 @@ module.exports = {
     themes: [
       {
         swan: {
-          "primary": "#6366f1",
+          "primary": "#7B4BFF",
           "primary-content": "#ffffff",
           "secondary": "#f0f0f4",
           "secondary-content": "#1e1e24",
-          "accent": "#8b5cf6",
+          "accent": "#9b6dff",
           "accent-content": "#ffffff",
           "neutral": "#1e1e24",
           "neutral-content": "#f5f5f7",
