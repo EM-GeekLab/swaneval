@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column
+from sqlalchemy import Column, DateTime
 from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
@@ -73,16 +73,22 @@ class EvalTask(SQLModel, table=True):
     created_by: uuid.UUID | None = Field(default=None, foreign_key="users.id")
     # 创建者ID / Creator user ID (foreign key to users)
 
-    started_at: datetime | None = Field(default=None)
+    started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # 开始时间 / Start timestamp
 
-    finished_at: datetime | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # 完成时间 / Finish timestamp
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
     # 创建时间 / Creation timestamp
 
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
     # 更新时间 / Last update timestamp
 
 
@@ -122,8 +128,14 @@ class EvalSubtask(SQLModel, table=True):
     error_log: str = Field(default="")
     # 错误日志 / Error log (if failed)
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
     # 创建时间 / Creation timestamp
 
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
     # 更新时间 / Update timestamp

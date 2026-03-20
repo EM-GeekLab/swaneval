@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -49,5 +50,8 @@ class EvalResult(SQLModel, table=True):
     first_token_ms: float = Field(default=0.0)
     # 首个token延迟(毫秒) / Time to first token in milliseconds
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
     # 创建时间 / Creation timestamp

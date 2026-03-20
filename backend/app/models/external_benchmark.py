@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -41,4 +42,7 @@ class ExternalBenchmark(SQLModel, table=True):
     notes: str = Field(default="")
     # 备注 / Notes
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
