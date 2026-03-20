@@ -123,7 +123,7 @@ function exportCSV(data: LeaderboardEntry[]) {
 
 export default function ResultsPage() {
   const { data: criteria = [] } = useCriteria();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [] } = useTasks(undefined, false);
   const { data: benchmarks = [] } = useBenchmarks();
   const createBenchmarkBatch = useCreateBenchmarkBatch();
   const deleteBenchmark = useDeleteBenchmark();
@@ -155,6 +155,7 @@ export default function ResultsPage() {
     detailTaskId || undefined,
     detailPage,
     PAGE_SIZE,
+    activeView === "detail" && !!detailTaskId,
   );
   const detailResults = detailData?.items ?? [];
   const detailTotal = detailData?.total ?? 0;

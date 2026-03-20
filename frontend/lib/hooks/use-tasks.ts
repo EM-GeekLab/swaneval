@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { EvalSubtask, EvalTask } from "@/lib/types";
 
-export function useTasks(status?: string) {
+/**
+ * Fetch tasks list. Only polls when active tasks exist.
+ * Pass `poll=false` to disable polling entirely (e.g. for static dropdowns).
+ */
+export function useTasks(status?: string, poll = true) {
   return useQuery({
     queryKey: ["tasks", status],
     queryFn: async () => {
@@ -11,10 +15,21 @@ export function useTasks(status?: string) {
       const res = await api.get<EvalTask[]>("/tasks", { params });
       return res.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: poll
+      ? (query) => {
+          const tasks = query.state.data as EvalTask[] | undefined;
+          const hasActive = tasks?.some(
+            (t) => t.status === "running" || t.status === "pending",
+          );
+          return hasActive ? 5000 : false;
+        }
+      : false,
   });
 }
 
+/**
+ * Fetch single task. Only polls while running/pending.
+ */
 export function useTask(id: string) {
   return useQuery({
     queryKey: ["tasks", id],
@@ -23,10 +38,18 @@ export function useTask(id: string) {
       return res.data;
     },
     enabled: !!id,
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const task = query.state.data as EvalTask | undefined;
+      const isActive =
+        task?.status === "running" || task?.status === "pending";
+      return isActive ? 3000 : false;
+    },
   });
 }
 
+/**
+ * Fetch subtasks for a task. Always polls when enabled (subtasks are short-lived).
+ */
 export function useSubtasks(taskId: string) {
   return useQuery({
     queryKey: ["tasks", taskId, "subtasks"],

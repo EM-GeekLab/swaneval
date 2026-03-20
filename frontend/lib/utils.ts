@@ -18,6 +18,18 @@ export function extractErrorDetail(err: unknown, fallback = "操作失败"): str
 }
 
 /**
+ * Count items by a key function. Replaces the repeated useMemo counting pattern.
+ */
+export function countBy<T>(items: T[], keyFn: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    const key = keyFn(item);
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
  * Parse a timestamp string as UTC.
  * Backend sends naive UTC timestamps without 'Z' suffix —
  * JS would misinterpret them as local time. This ensures UTC.

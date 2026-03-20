@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { EvalResult, LeaderboardEntry, TaskSummaryEntry, PaginatedResponse } from "@/lib/types";
 
-export function useResults(taskId?: string, page = 1, pageSize = 50) {
+export function useResults(taskId?: string, page = 1, pageSize = 50, enabled = true) {
   return useQuery({
     queryKey: ["results", taskId, page, pageSize],
     queryFn: async () => {
@@ -11,6 +11,7 @@ export function useResults(taskId?: string, page = 1, pageSize = 50) {
       const res = await api.get<PaginatedResponse<EvalResult>>("/results", { params });
       return res.data;
     },
+    enabled,
   });
 }
 
