@@ -54,7 +54,6 @@ import {
   RefreshCw,
   Bell,
   BellOff,
-  BookOpen,
   Database,
 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
@@ -76,6 +75,7 @@ import { utc } from "@/lib/utils";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
 import { SegmentedControl } from "@/components/segmented-control";
+import { PresetListPanel, type PresetItem } from "@/components/preset-list-panel";
 
 const sourceTypeLabel: Record<string, string> = {
   upload: "上传",
@@ -157,6 +157,8 @@ export default function DatasetsPage() {
   const [mountForm, setMountForm] = useState({ ...emptyMountForm });
   const [importForm, setImportForm] = useState({ ...emptyImportForm });
   const [onlineImportError, setOnlineImportError] = useState("");
+  const [presetSelected, setPresetSelected] = useState<string[]>([]);
+  const [createTab, setCreateTab] = useState("online");
   const fileRef = useRef<HTMLInputElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [createPos, setCreatePos] = useState<{ top: number; right: number } | null>(null);
@@ -902,6 +904,70 @@ export default function DatasetsPage() {
         onClose={closePanel}
         onShake={() => setShakeCancel(true)}
         title="添加数据集"
+        sidePanel={
+          createTab === "online" ? (
+            <PresetListPanel
+              title="预设基准数据集"
+              loading={presets.length === 0}
+              items={presets.map((p): PresetItem => ({
+                key: p.hf_id,
+                name: p.name,
+                description: p.description,
+                tags: p.tags,
+                badge: p.split,
+                done: (datasetsData?.items ?? []).some(
+                  (d) => d.name === p.name && d.row_count > 0,
+                ),
+              }))}
+              selected={presetSelected}
+              onSelectionChange={(keys) => {
+                setPresetSelected(keys);
+                // Auto-fill import form when selecting a preset
+                const key = keys[keys.length - 1];
+                const p = presets.find((x) => x.hf_id === key);
+                if (p) {
+                  setImportForm({
+                    ...importForm,
+                    source: "huggingface",
+                    dataset_id: p.hf_id,
+                    name: p.name,
+                    split: p.split,
+                    description: p.description,
+                    tags: p.tags,
+                  });
+                }
+              }}
+              onConfirm={async (keys) => {
+                setOnlineImportError("");
+                for (const key of keys) {
+                  const p = presets.find((x) => x.hf_id === key);
+                  if (!p) continue;
+                  try {
+                    await importDs.mutateAsync({
+                      source: "huggingface",
+                      dataset_id: p.hf_id,
+                      name: p.name,
+                      split: p.split,
+                      description: p.description,
+                      tags: p.tags,
+                    });
+                  } catch (err: unknown) {
+                    const detail =
+                      err && typeof err === "object" && "response" in err
+                        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+                        : undefined;
+                    setOnlineImportError(detail || "导入失败");
+                    return;
+                  }
+                }
+                setPresetSelected([]);
+              }}
+              confirmLabel="下载导入"
+              confirming={importDs.isPending}
+              error={onlineImportError}
+            />
+          ) : undefined
+        }
       >
                 <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
                   <button
@@ -942,105 +1008,18 @@ export default function DatasetsPage() {
                   )}
                 </div>
 
-                <Tabs defaultValue="preset">
+                <Tabs value={createTab} onValueChange={setCreateTab}>
                   <TabsList className="w-full">
-                    <TabsTrigger value="preset" className="flex-1">
-                      <BookOpen className="mr-1 h-3.5 w-3.5" /> 预设
+                    <TabsTrigger value="online" className="flex-1">
+                      <Globe className="mr-1 h-3.5 w-3.5" /> 在线导入
                     </TabsTrigger>
                     <TabsTrigger value="upload" className="flex-1">
                       <Upload className="mr-1 h-3.5 w-3.5" /> 上传
-                    </TabsTrigger>
-                    <TabsTrigger value="online" className="flex-1">
-                      <Globe className="mr-1 h-3.5 w-3.5" /> 在线导入
                     </TabsTrigger>
                     <TabsTrigger value="mount" className="flex-1">
                       <FolderOpen className="mr-1 h-3.5 w-3.5" /> 路径
                     </TabsTrigger>
                   </TabsList>
-
-                  <TabsContent value="preset">
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        选择一个预设基准数据集，将从 HuggingFace 下载并导入。
-                      </p>
-                      {presets.length === 0 ? (
-                        <div className="py-6 text-center text-xs text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                          加载预设列表...
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5 max-h-[50vh] overflow-auto">
-                          {presets.map((p) => {
-                            // Check if already imported
-                            const alreadyImported = (datasetsData?.items ?? []).some(
-                              (d) => d.name === p.name && d.row_count > 0
-                            );
-                            return (
-                              <button
-                                key={p.name}
-                                type="button"
-                                disabled={importDs.isPending || alreadyImported}
-                                onClick={async () => {
-                                  setOnlineImportError("");
-                                  try {
-                                    await importDs.mutateAsync({
-                                      source: "huggingface",
-                                      dataset_id: p.hf_id,
-                                      name: p.name,
-                                      split: p.split,
-                                      description: p.description,
-                                      tags: p.tags,
-                                    });
-                                    closePanel();
-                                  } catch (err: unknown) {
-                                    const detail =
-                                      err && typeof err === "object" && "response" in err
-                                        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-                                        : undefined;
-                                    setOnlineImportError(detail || "导入失败");
-                                  }
-                                }}
-                                className={`w-full rounded-lg border p-3 text-left transition-all ${
-                                  alreadyImported
-                                    ? "opacity-50 cursor-not-allowed bg-muted/30"
-                                    : "hover:border-primary/40 hover:bg-primary/[0.03] active:scale-[0.99]"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-medium">{p.name}</span>
-                                  <div className="flex items-center gap-1.5">
-                                    {alreadyImported && (
-                                      <Badge variant="success" className="text-[10px]">已导入</Badge>
-                                    )}
-                                    <Badge variant="outline" className="text-[10px] font-normal">{p.split}</Badge>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                  {p.tags.split(",").map((t) => (
-                                    <Badge key={t.trim()} variant="secondary" className="text-[10px] font-normal">
-                                      {t.trim()}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {onlineImportError && (
-                        <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                          {onlineImportError}
-                        </div>
-                      )}
-                      {importDs.isPending && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          正在从 HuggingFace 下载，可能需要几分钟...
-                        </div>
-                      )}
-                    </div>
-                  </TabsContent>
 
                   <TabsContent value="upload">
                     <form onSubmit={handleUpload} className="space-y-3">

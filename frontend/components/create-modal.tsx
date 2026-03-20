@@ -12,6 +12,8 @@ interface CreateModalProps {
   onShake: () => void;
   title: string;
   children: React.ReactNode;
+  /** Optional panel rendered to the left of the main card */
+  sidePanel?: React.ReactNode;
 }
 
 export function CreateModal({
@@ -22,12 +24,10 @@ export function CreateModal({
   onShake,
   title,
   children,
+  sidePanel,
 }: CreateModalProps) {
   if (!open || !position) return null;
 
-  // Portal only the backdrop to document.body so it covers the full viewport
-  // including the sticky topbar. The modal card stays in-flow (portaled too)
-  // so everything is above the backdrop.
   return (
     <>
       {createPortal(
@@ -44,13 +44,18 @@ export function CreateModal({
         document.body,
       )}
       <div
-        className="fixed z-[60] animate-modal-expand"
+        className="fixed z-[60] animate-modal-expand flex items-start gap-3"
         style={{
           top: position.top,
           right: position.right,
           transformOrigin: "top right",
         }}
       >
+        {sidePanel && (
+          <div className="animate-modal-expand" style={{ transformOrigin: "top right" }}>
+            {sidePanel}
+          </div>
+        )}
         <Card className="w-[33vw] shadow-2xl">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <h3 className="text-sm font-semibold">{title}</h3>
