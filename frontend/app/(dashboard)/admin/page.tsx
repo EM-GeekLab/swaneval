@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
+import { extractErrorDetail } from "@/lib/utils";
 import { useUsers, useUpdateUser, useDeleteUser } from "@/lib/hooks/use-users";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { FilterDropdown } from "@/components/filter-dropdown";
@@ -68,12 +69,7 @@ export default function AdminPage() {
         setSelectedUserId(null);
       }
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
-      setDeleteError(detail || "删除失败");
+      setDeleteError(extractErrorDetail(err, "删除失败"));
     }
   };
 

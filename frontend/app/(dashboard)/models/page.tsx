@@ -14,19 +14,10 @@ import {
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PanelField, DetailRow } from "@/components/panel-helpers";
 import { CreateModal } from "@/components/create-modal";
 import { SelectionBar } from "@/components/selection-bar";
 import { DeleteDialog } from "@/components/delete-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -40,28 +31,26 @@ import {
   Trash2,
   Zap,
   Loader2,
-  Search,
   ArrowUpDown,
   X,
   ChevronRight,
-  Pencil,
   Copy,
   Check,
-  KeyRound,
   Cpu,
 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
+import { PageHeader, SearchToolbar } from "@/components/page-header";
 import {
   useModels,
-  useCreateModel,
-  useUpdateModel,
   useDeleteModel,
   useTestModel,
 } from "@/lib/hooks/use-models";
 import type { LLMModel } from "@/lib/types";
-import { utc } from "@/lib/utils";
+import { extractErrorDetail } from "@/lib/utils";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
+import { ModelDetailPanel } from "@/components/models/model-detail-panel";
+import { ModelCreateForm } from "@/components/models/model-create-form";
 
 const typeLabel: Record<string, string> = {
   api: "API",
@@ -71,27 +60,8 @@ const typeLabel: Record<string, string> = {
 
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
-const apiFormatLabel: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-};
-
-const emptyForm = {
-  name: "",
-  provider: "",
-  endpoint_url: "",
-  api_key: "",
-  model_type: "api",
-  api_format: "openai",
-  description: "",
-  model_name: "",
-  max_tokens: "4096",
-};
-
 export default function ModelsPage() {
   const { data: models = [], isLoading } = useModels();
-  const create = useCreateModel();
-  const update = useUpdateModel();
   const deleteMut = useDeleteModel();
   const testModel = useTestModel();
 
@@ -110,7 +80,6 @@ export default function ModelsPage() {
   const [typeFilter, setTypeFilter] = useState<string>("__all__");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [form, setForm] = useState({ ...emptyForm });
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [createPos, setCreatePos] = useState<{ top: number; right: number } | null>(null);
   const [shakeCancel, setShakeCancel] = useState(false);
@@ -119,12 +88,12 @@ export default function ModelsPage() {
   const isCreating = panel?.kind === "create";
   const selectedModel = models.find((m) => m.id === selectedId);
   const viewPanelOpen = panel?.kind === "view";
-  const formDirty = isCreating && Object.entries(emptyForm).some(
-    ([k, v]) => form[k as keyof typeof form] !== v,
-  );
+
+  // ModelCreateForm manages its own form state, so formDirty is
+  // conservatively true whenever the create panel is open.
+  const formDirty = isCreating;
 
   const openCreate = () => {
-    setForm({ ...emptyForm });
     if (addBtnRef.current) {
       const rect = addBtnRef.current.getBoundingClientRect();
       setCreatePos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
@@ -139,74 +108,6 @@ export default function ModelsPage() {
   };
 
   const closePanel = () => setPanel(null);
-
-  const [importError, setImportError] = useState("");
-
-  const importFromClipboard = async () => {
-    setImportError("");
-    try {
-      const text = await navigator.clipboard.readText();
-      const data = JSON.parse(text);
-      setForm((f) => ({
-        ...f,
-        name: data.name ?? f.name,
-        provider: data.provider ?? f.provider,
-        endpoint_url: data.endpoint_url ?? f.endpoint_url,
-        api_key: data.api_key ?? f.api_key,
-        model_type: data.model_type ?? f.model_type,
-        api_format: data.api_format ?? f.api_format,
-        description: data.description ?? f.description,
-        model_name: data.model_name ?? f.model_name,
-        max_tokens:
-          data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
-      }));
-    } catch {
-      setImportError("剪贴板内容不是有效的 JSON");
-      setTimeout(() => setImportError(""), 3000);
-    }
-  };
-
-  const importFromJson = (text: string) => {
-    setImportError("");
-    try {
-      const data = JSON.parse(text);
-      setForm((f) => ({
-        ...f,
-        name: data.name ?? f.name,
-        provider: data.provider ?? f.provider,
-        endpoint_url: data.endpoint_url ?? f.endpoint_url,
-        api_key: data.api_key ?? f.api_key,
-        model_type: data.model_type ?? f.model_type,
-        api_format: data.api_format ?? f.api_format,
-        description: data.description ?? f.description,
-        model_name: data.model_name ?? f.model_name,
-        max_tokens:
-          data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
-      }));
-    } catch {
-      setImportError("无法解析 JSON");
-      setTimeout(() => setImportError(""), 3000);
-    }
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const isHF = form.model_type === "huggingface";
-    await create.mutateAsync({
-      name: form.name,
-      provider: isHF ? "huggingface" : form.provider,
-      endpoint_url: isHF
-        ? `https://api-inference.huggingface.co/models/${form.model_name}/v1/chat/completions`
-        : form.endpoint_url,
-      api_key: form.api_key || undefined,
-      model_type: form.model_type,
-      api_format: isHF ? "openai" : form.api_format,
-      description: form.description || undefined,
-      model_name: form.model_name || undefined,
-      max_tokens: form.max_tokens ? parseInt(form.max_tokens) : undefined,
-    });
-    closePanel();
-  };
 
   const handleTest = async (id: string) => {
     setTestingId(id);
@@ -238,12 +139,7 @@ export default function ModelsPage() {
       await deleteMut.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
-      setDeleteError(detail || "删除失败");
+      setDeleteError(extractErrorDetail(err, "删除失败"));
     }
   };
 
@@ -383,54 +279,39 @@ export default function ModelsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-5">
-          <h1 className="text-lg font-semibold">模型管理</h1>
-          <div className="hidden sm:flex items-center gap-4 text-xs text-base-content/50">
-            <span>
-              共{" "}
-              <span className="font-semibold text-base-content tabular-nums">
-                {models.length}
-              </span>{" "}
-              个模型
-            </span>
-            {Object.entries(typeCounts).map(([type, count]) => (
-              <span key={type}>
-                {typeLabel[type] ?? type}{" "}
-                <span className="font-semibold text-base-content tabular-nums">
-                  {count}
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-        <Button
-          ref={addBtnRef}
-          size="sm"
-          onClick={isCreating ? closePanel : openCreate}
-          variant={isCreating ? "destructive" : "default"}
-          className={`${isCreating ? "relative z-[60]" : ""} ${shakeCancel ? "animate-shake" : ""}`}
-          onAnimationEnd={() => setShakeCancel(false)}
-        >
-          {isCreating ? (
-            <><X className="mr-1 h-4 w-4" /> 取消</>
-          ) : (
-            <><Plus className="mr-1 h-4 w-4" /> 添加模型</>
-          )}
-        </Button>
-      </div>
+      <PageHeader
+        title="模型管理"
+        stats={[
+          { label: "共", value: models.length },
+          ...Object.entries(typeCounts).map(([type, count]) => ({
+            label: typeLabel[type] ?? type,
+            value: count,
+          })),
+        ]}
+        action={
+          <Button
+            ref={addBtnRef}
+            size="sm"
+            onClick={isCreating ? closePanel : openCreate}
+            variant={isCreating ? "destructive" : "default"}
+            className={`${isCreating ? "relative z-[60]" : ""} ${shakeCancel ? "animate-shake" : ""}`}
+            onAnimationEnd={() => setShakeCancel(false)}
+          >
+            {isCreating ? (
+              <><X className="mr-1 h-4 w-4" /> 取消</>
+            ) : (
+              <><Plus className="mr-1 h-4 w-4" /> 添加模型</>
+            )}
+          </Button>
+        }
+      />
 
-      {/* Toolbar: search + filter — unified h-9 */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-base-content/50" />
-          <Input
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="搜索模型名称、提供商、端点..."
-            className="pl-9 h-8 rounded-full text-xs"
-          />
-        </div>
+      {/* Toolbar: search + filter */}
+      <SearchToolbar
+        value={globalFilter}
+        onChange={setGlobalFilter}
+        placeholder="搜索模型名称、提供商、端点..."
+      >
         <FilterDropdown
           label="类型"
           options={Object.entries(typeCounts).map(([type, count]) => ({
@@ -441,7 +322,7 @@ export default function ModelsPage() {
           value={typeFilter}
           onChange={setTypeFilter}
         />
-      </div>
+      </SearchToolbar>
 
       {/* Main: table + side panel */}
       <div className="flex gap-4 min-h-0">
@@ -593,178 +474,17 @@ export default function ModelsPage() {
           </CardContent>
         </Card>
 
-        {/* View panel — right half */}
+        {/* View panel -- right side */}
         {viewPanelOpen && selectedModel && (
-          <div className="w-1/3 shrink-0">
-            <Card className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-auto">
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                <h3 className="text-sm font-semibold truncate">{selectedModel.name}</h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 -mr-1"
-                  onClick={closePanel}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              {selectedModel && (
-                <CardContent className="pt-0 space-y-4">
-                  {selectedModel.description && (
-                    <p className="text-xs text-base-content/50">
-                      {selectedModel.description}
-                    </p>
-                  )}
-
-                  <div className="space-y-2.5">
-                    <DetailRow label="提供商" value={selectedModel.provider} />
-                    <DetailRow
-                      label="类型"
-                      value={
-                        <Badge
-                          variant="outline"
-                          className="text-xs font-normal"
-                        >
-                          {typeLabel[selectedModel.model_type] ??
-                            selectedModel.model_type}
-                        </Badge>
-                      }
-                    />
-                    <EditableSelect
-                      label="API 协议"
-                      value={selectedModel.api_format}
-                      displayValue={
-                        apiFormatLabel[selectedModel.api_format] ??
-                        selectedModel.api_format
-                      }
-                      options={[
-                        { value: "openai", label: "OpenAI" },
-                        { value: "anthropic", label: "Anthropic" },
-                      ]}
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          api_format: v,
-                        })
-                      }
-                    />
-                    <EditableText
-                      label="模型 ID"
-                      value={selectedModel.model_name}
-                      mono
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          model_name: v,
-                        })
-                      }
-                    />
-                    <EditableText
-                      label="端点"
-                      value={selectedModel.endpoint_url}
-                      mono
-                      small
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          endpoint_url: v,
-                        })
-                      }
-                    />
-                    <EditableSecret
-                      label="API 密钥"
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          api_key: v,
-                        })
-                      }
-                    />
-                    <EditableText
-                      label="最大 Token"
-                      value={
-                        selectedModel.max_tokens
-                          ? String(selectedModel.max_tokens)
-                          : ""
-                      }
-                      mono
-                      placeholder="未设置"
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          max_tokens: v ? parseInt(v) : null,
-                        })
-                      }
-                    />
-                    <EditableText
-                      label="描述"
-                      value={selectedModel.description}
-                      placeholder="无描述"
-                      onSave={(v) =>
-                        update.mutate({
-                          id: selectedModel.id,
-                          description: v,
-                        })
-                      }
-                    />
-                    <DetailRow
-                      label="注册时间"
-                      value={utc(selectedModel.created_at)?.toLocaleString()}
-                    />
-                  </div>
-
-                  {/* Test result banner */}
-                  {testResults[selectedModel.id] &&
-                    testResults[selectedModel.id].message !== "测试中..." && (
-                      <div
-                        className={`rounded-md px-3 py-2 text-xs ${
-                          testResults[selectedModel.id].ok
-                            ? "bg-emerald-500/10 text-emerald-700"
-                            : "bg-error/10 text-error"
-                        }`}
-                      >
-                        {testResults[selectedModel.id].message}
-                      </div>
-                    )}
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleTest(selectedModel.id)}
-                      disabled={testingId === selectedModel.id}
-                    >
-                      {testingId === selectedModel.id ? (
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="mr-1.5 h-3.5 w-3.5" />
-                      )}
-                      测试连接
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-error hover:text-error hover:bg-error/5"
-                      onClick={() =>
-                        setDeleteTarget({
-                          id: selectedModel.id,
-                          name: selectedModel.name,
-                        })
-                      }
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          </div>
+          <ModelDetailPanel
+            model={selectedModel}
+            onClose={closePanel}
+            onDelete={setDeleteTarget}
+          />
         )}
       </div>
 
-      {/* Create modal — expands from Add button */}
+      {/* Create modal -- expands from Add button */}
       <CreateModal
         open={isCreating}
         position={createPos}
@@ -773,190 +493,7 @@ export default function ModelsPage() {
         onShake={() => setShakeCancel(true)}
         title="添加模型"
       >
-                <div className="flex items-center gap-2 mb-3 text-xs text-base-content/50">
-                  <button
-                    type="button"
-                    className="hover:text-base-content transition-colors"
-                    onClick={importFromClipboard}
-                  >
-                    从剪贴板导入
-                  </button>
-                  <span className="text-border">|</span>
-                  <label className="hover:text-base-content transition-colors cursor-pointer">
-                    <input
-                      type="file"
-                      accept=".json"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () =>
-                          importFromJson(reader.result as string);
-                        reader.readAsText(file);
-                        e.target.value = "";
-                      }}
-                    />
-                    从 JSON 导入
-                  </label>
-                  {importError && (
-                    <span className="text-error">{importError}</span>
-                  )}
-                </div>
-
-                <form onSubmit={handleCreate} className="space-y-3">
-                  <PanelField label="显示名称" required>
-                    <Input
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                      placeholder="GPT-4o"
-                      required
-                    />
-                  </PanelField>
-                  <div className="grid grid-cols-2 gap-2">
-                    <PanelField label="提供商" required>
-                      <Input
-                        value={form.provider}
-                        onChange={(e) =>
-                          setForm({ ...form, provider: e.target.value })
-                        }
-                        placeholder="openai"
-                        required
-                      />
-                    </PanelField>
-                    <PanelField label="类型">
-                      <Select
-                        value={form.model_type}
-                        onValueChange={(v) =>
-                          setForm({ ...form, model_type: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="api">API</SelectItem>
-                          <SelectItem value="local">本地</SelectItem>
-                          <SelectItem value="huggingface">HuggingFace</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </PanelField>
-                  </div>
-                  {form.model_type === "huggingface" ? (
-                    <>
-                      <PanelField label="HuggingFace 模型 ID" required>
-                        <Input
-                          value={form.model_name}
-                          onChange={(e) =>
-                            setForm({ ...form, model_name: e.target.value })
-                          }
-                          placeholder="Qwen/Qwen2.5-0.5B-Instruct"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-[11px] text-base-content/50 mt-1">
-                          HuggingFace 模型仓库 ID，将通过 Inference API 调用
-                        </p>
-                      </PanelField>
-                      <PanelField label="HF Token">
-                        <Input
-                          type="password"
-                          value={form.api_key}
-                          onChange={(e) =>
-                            setForm({ ...form, api_key: e.target.value })
-                          }
-                          placeholder="hf_..."
-                        />
-                      </PanelField>
-                    </>
-                  ) : (
-                    <>
-                      <PanelField label="API 协议">
-                        <Select
-                          value={form.api_format}
-                          onValueChange={(v) =>
-                            setForm({ ...form, api_format: v })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="openai">OpenAI</SelectItem>
-                            <SelectItem value="anthropic">Anthropic</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </PanelField>
-                      <PanelField label="模型 ID">
-                        <Input
-                          value={form.model_name}
-                          onChange={(e) =>
-                            setForm({ ...form, model_name: e.target.value })
-                          }
-                          placeholder="gpt-4o-2024-08-06"
-                          className="font-mono"
-                        />
-                      </PanelField>
-                      <PanelField label="端点 URL" required>
-                        <Input
-                          value={form.endpoint_url}
-                          onChange={(e) =>
-                            setForm({ ...form, endpoint_url: e.target.value })
-                          }
-                          placeholder="https://api.openai.com/v1/..."
-                          className="font-mono"
-                          required
-                        />
-                      </PanelField>
-                      <PanelField label="API 密钥">
-                        <Input
-                          type="password"
-                          value={form.api_key}
-                          onChange={(e) =>
-                            setForm({ ...form, api_key: e.target.value })
-                          }
-                          placeholder="sk-..."
-                        />
-                      </PanelField>
-                    </>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <PanelField label="最大 Token">
-                      <Input
-                        type="number"
-                        value={form.max_tokens}
-                        onChange={(e) =>
-                          setForm({ ...form, max_tokens: e.target.value })
-                        }
-                      />
-                    </PanelField>
-                  </div>
-                  <PanelField label="描述">
-                    <Input
-                      value={form.description}
-                      onChange={(e) =>
-                        setForm({ ...form, description: e.target.value })
-                      }
-                      placeholder="备注（可选）"
-                    />
-                  </PanelField>
-                  <div className="pt-1">
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={create.isPending}
-                    >
-                      {create.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Plus className="mr-2 h-4 w-4" />
-                      )}
-                      {create.isPending ? "添加中..." : "添加模型"}
-                    </Button>
-                  </div>
-                </form>
+        <ModelCreateForm onSuccess={closePanel} onClose={closePanel} />
       </CreateModal>
 
       {/* Floating selection bar */}
@@ -984,207 +521,6 @@ export default function ModelsPage() {
         onConfirm={handleDelete}
         onCancel={() => { setDeleteTarget(null); setDeleteError(""); }}
       />
-    </div>
-  );
-}
-
-/* ── Sub-components ── */
-
-function EditableText({
-  label,
-  value,
-  mono,
-  small,
-  placeholder,
-  onSave,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  small?: boolean;
-  placeholder?: string;
-  onSave: (value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  const commit = () => {
-    setEditing(false);
-    if (draft !== value) onSave(draft);
-  };
-
-  if (editing) {
-    return (
-      <div className="flex items-start justify-between gap-3 text-xs">
-        <span className="text-base-content/50 shrink-0 pt-1.5">{label}</span>
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") {
-              setDraft(value);
-              setEditing(false);
-            }
-          }}
-          className={`h-7 text-xs text-right ${mono ? "font-mono" : ""}`}
-          autoFocus
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-base-200/60 transition-colors"
-      onClick={() => {
-        setDraft(value);
-        setEditing(true);
-      }}
-    >
-      <span className="text-base-content/50 shrink-0">{label}</span>
-      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
-      <div className="flex items-center gap-1 shrink-0">
-        {value ? (
-          <span
-            className={`truncate max-w-[180px] ${mono ? "font-mono" : ""} ${small ? "text-[11px]" : ""}`}
-          >
-            {value}
-          </span>
-        ) : (
-          <span className="text-base-content/30 italic">
-            {placeholder ?? "—"}
-          </span>
-        )}
-        <Pencil className="h-2.5 w-2.5 text-base-content/50/30 group-hover/edit:text-base-content/40 transition-colors shrink-0" />
-      </div>
-    </div>
-  );
-}
-
-function EditableSecret({
-  label,
-  onSave,
-}: {
-  label: string;
-  onSave: (value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  const commit = () => {
-    if (draft.trim()) {
-      onSave(draft.trim());
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
-    setDraft("");
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <div className="flex items-start justify-between gap-3 text-xs">
-        <span className="text-base-content/50 shrink-0 pt-1.5">{label}</span>
-        <Input
-          type="password"
-          value={draft}
-          placeholder="输入新密钥"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") {
-              setDraft("");
-              setEditing(false);
-            }
-          }}
-          className="h-7 text-xs text-right font-mono"
-          autoFocus
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-base-200/60 transition-colors"
-      onClick={() => setEditing(true)}
-    >
-      <span className="text-base-content/50 shrink-0">{label}</span>
-      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="font-mono text-base-content/50/70">••••••••</span>
-        {saved ? (
-          <Check className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
-        ) : (
-          <KeyRound className="h-2.5 w-2.5 text-base-content/50/30 group-hover/edit:text-base-content/40 transition-colors shrink-0" />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EditableSelect({
-  label,
-  value,
-  displayValue,
-  options,
-  onSave,
-}: {
-  label: string;
-  value: string;
-  displayValue: string;
-  options: { value: string; label: string }[];
-  onSave: (value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-
-  if (editing) {
-    return (
-      <div className="flex items-start justify-between gap-3 text-xs">
-        <span className="text-base-content/50 shrink-0 pt-1.5">{label}</span>
-        <Select
-          value={value}
-          onValueChange={(v) => {
-            setEditing(false);
-            if (v !== value) onSave(v);
-          }}
-          open
-          onOpenChange={(open) => {
-            if (!open) setEditing(false);
-          }}
-        >
-          <SelectTrigger className="h-7 text-xs w-auto min-w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex items-baseline gap-2 text-xs group/edit cursor-pointer rounded-sm px-1 -mx-1 py-0.5 -my-0.5 hover:bg-base-200/60 transition-colors"
-      onClick={() => setEditing(true)}
-    >
-      <span className="text-base-content/50 shrink-0">{label}</span>
-      <div className="flex-1 border-b border-dashed border-muted-foreground/20 min-w-4 translate-y-[-3px]" />
-      <div className="flex items-center gap-1 shrink-0">
-        <Badge variant="outline" className="text-xs font-normal">
-          {displayValue}
-        </Badge>
-        <Pencil className="h-2.5 w-2.5 text-base-content/50/30 group-hover/edit:text-base-content/40 transition-colors shrink-0" />
-      </div>
     </div>
   );
 }

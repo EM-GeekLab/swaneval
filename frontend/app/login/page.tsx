@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { useQueryClient } from "@tanstack/react-query";
+import { extractErrorDetail } from "@/lib/utils";
 import api from "@/lib/api";
 import type { TokenResponse, User } from "@/lib/types";
 import { useUserCount } from "@/lib/hooks/use-users";
@@ -56,11 +57,7 @@ export default function LoginPage() {
       localStorage.setItem("user", JSON.stringify(user));
       window.location.href = "/";
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
+      const detail = extractErrorDetail(err, "");
       if (detail === "User not found") {
         setError("该用户不存在，请先注册账号");
         setMode("register");
@@ -89,12 +86,7 @@ export default function LoginPage() {
         password: regForm.password,
       });
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
-      setError(detail || "注册失败");
+      setError(extractErrorDetail(err, "注册失败"));
     } finally {
       setLoading(false);
     }

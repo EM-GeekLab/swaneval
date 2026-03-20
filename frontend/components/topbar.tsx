@@ -17,7 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/auth";
-import { cn } from "@/lib/utils";
+import { cn, extractErrorDetail } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,12 +158,7 @@ function AccountSettingsPanel({
       setProfileSuccess("保存成功");
       setTimeout(() => setProfileSuccess(""), 3000);
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
-      setProfileError(detail || "保存失败");
+      setProfileError(extractErrorDetail(err, "保存失败"));
     }
   };
 
@@ -184,12 +179,7 @@ function AccountSettingsPanel({
       setNewPassword("");
       setTimeout(() => setPwSuccess(""), 3000);
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { detail?: string } } }).response
-              ?.data?.detail
-          : undefined;
-      setPwError(detail || "密码修改失败");
+      setPwError(extractErrorDetail(err, "密码修改失败"));
     }
   };
 

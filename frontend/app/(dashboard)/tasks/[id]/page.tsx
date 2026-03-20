@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { extractErrorDetail } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -412,12 +413,7 @@ export default function TaskDetailPage() {
                   await deleteTask.mutateAsync(id);
                   router.push("/tasks");
                 } catch (err: unknown) {
-                  const detail =
-                    err && typeof err === "object" && "response" in err
-                      ? (err as { response?: { data?: { detail?: string } } }).response
-                          ?.data?.detail
-                      : undefined;
-                  setDeleteError(detail || "删除失败");
+                  setDeleteError(extractErrorDetail(err, "删除失败"));
                 }
               }}
               disabled={deleteTask.isPending}
