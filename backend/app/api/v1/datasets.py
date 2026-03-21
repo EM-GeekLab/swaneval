@@ -29,10 +29,25 @@ from app.schemas.dataset import (
 )
 from app.services.dataset_deletion import cleanup_uploaded_file, delete_dataset_versions
 from app.services.storage import StorageBackend, get_storage
+from app.services.storage.file_io import read_bytes as _read_bytes_raw
+from app.services.storage.file_io import read_text as _read_text_raw
 from app.services.storage.utils import uri_to_key
 
 # In-memory preflight cache: token -> {source_uri, format, row_count, ...}
 _preflight_cache: dict[str, dict] = {}
+_PREFLIGHT_TTL = 1800  # 30 minutes
+_PREFLIGHT_MAX_SIZE = 200
+
+
+def _cleanup_preflight_cache() -> None:
+    """Remove expired preflight entries."""
+    now = time.time()
+    expired = [
+        k for k, v in _preflight_cache.items()
+        if now - v.get("created_at", 0) > _PREFLIGHT_TTL
+    ]
+    for k in expired:
+        _preflight_cache.pop(k, None)
 
 router = APIRouter()
 
@@ -99,28 +114,18 @@ async def _count_rows(storage: StorageBackend, source_uri: str) -> int:
 
 async def _read_text(storage: StorageBackend, source_uri: str) -> str | None:
     """Read file content as text, from storage or local filesystem."""
-    key = uri_to_key(source_uri)
-    if key is not None:
-        if not await storage.exists(key):
-            return None
-        return await storage.read_text(key)
-    if not os.path.exists(source_uri):
+    try:
+        return await _read_text_raw(storage, source_uri)
+    except FileNotFoundError:
         return None
-    with open(source_uri, encoding="utf-8") as f:
-        return f.read()
 
 
 async def _read_bytes(storage: StorageBackend, source_uri: str) -> bytes | None:
     """Read file content as bytes, from storage or local filesystem."""
-    key = uri_to_key(source_uri)
-    if key is not None:
-        if not await storage.exists(key):
-            return None
-        return await storage.read_file(key)
-    if not os.path.exists(source_uri):
+    try:
+        return await _read_bytes_raw(storage, source_uri)
+    except FileNotFoundError:
         return None
-    with open(source_uri, "rb") as f:
-        return f.read()
 
 
 @router.post("/upload", response_model=DatasetResponse, status_code=201)
@@ -665,6 +670,10 @@ async def preflight_import(
     Supports all source types: upload file, HuggingFace, ModelScope, server path.
     Returns a preflight_token to use with /confirm.
     """
+    _cleanup_preflight_cache()
+    if len(_preflight_cache) >= _PREFLIGHT_MAX_SIZE:
+        raise HTTPException(429, "Too many pending preflight operations")
+
     from app.services.dataset_stats import _infer_dtype, _load_dataframe
 
     warnings: list[str] = []

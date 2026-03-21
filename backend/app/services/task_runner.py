@@ -56,6 +56,8 @@ from app.services.evalscope_adapter import (
 from app.services.evalscope_result_ingestor import ingest_evalscope_results
 from app.services.evaluators import run_criterion
 from app.services.storage import StorageBackend, get_storage
+from app.services.storage.file_io import read_bytes as _raw_read_bytes
+from app.services.storage.file_io import read_text as _raw_read_text
 from app.services.storage.utils import uri_to_key
 
 
@@ -180,33 +182,25 @@ async def _load_dataset_rows(
 async def _read_bytes(
     storage: StorageBackend,
     source_uri: str,
-    key: str | None,
+    key: str | None = None,
 ) -> bytes:
     """Read a file as bytes. Raises DatasetNotFoundError if missing."""
-    if key is not None:
-        if not await storage.exists(key):
-            raise DatasetNotFoundError(f"Dataset file not found in storage: {key}")
-        return await storage.read_file(key)
-    p = Path(source_uri)
-    if not p.exists():
-        raise DatasetNotFoundError(f"Dataset file not found on disk: {source_uri}")
-    return await asyncio.to_thread(p.read_bytes)
+    try:
+        return await _raw_read_bytes(storage, source_uri, key=key)
+    except FileNotFoundError:
+        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}")
 
 
 async def _read_text(
     storage: StorageBackend,
     source_uri: str,
-    key: str | None,
+    key: str | None = None,
 ) -> str:
     """Read a file as UTF-8 text. Raises DatasetNotFoundError if missing."""
-    if key is not None:
-        if not await storage.exists(key):
-            raise DatasetNotFoundError(f"Dataset file not found in storage: {key}")
-        return await storage.read_text(key)
-    p = Path(source_uri)
-    if not p.exists():
-        raise DatasetNotFoundError(f"Dataset file not found on disk: {source_uri}")
-    return await asyncio.to_thread(p.read_text, encoding="utf-8")
+    try:
+        return await _raw_read_text(storage, source_uri, key=key)
+    except FileNotFoundError:
+        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}")
 
 
 async def _run_task_with_evalscope(

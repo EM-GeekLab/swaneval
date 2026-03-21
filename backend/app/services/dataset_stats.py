@@ -7,34 +7,13 @@ import io
 import json
 import logging
 import os
-from pathlib import Path
 
 import pandas as pd
 
 from app.services.storage import StorageBackend
-from app.services.storage.utils import uri_to_key
+from app.services.storage.file_io import read_bytes, read_text
 
 logger = logging.getLogger(__name__)
-
-
-async def _read_bytes(storage: StorageBackend, uri: str, key: str | None) -> bytes:
-    if key is not None:
-        if await storage.exists(key):
-            return await storage.read_file(key)
-    p = Path(uri)
-    if p.exists():
-        return await asyncio.to_thread(p.read_bytes)
-    raise FileNotFoundError(f"Dataset file not found: {uri}")
-
-
-async def _read_text(storage: StorageBackend, uri: str, key: str | None) -> str:
-    if key is not None:
-        if await storage.exists(key):
-            return await storage.read_text(key)
-    p = Path(uri)
-    if p.exists():
-        return await asyncio.to_thread(p.read_text, encoding="utf-8")
-    raise FileNotFoundError(f"Dataset file not found: {uri}")
 
 
 async def _load_dataframe(
@@ -42,25 +21,24 @@ async def _load_dataframe(
 ) -> pd.DataFrame:
     """Load a dataset file into a pandas DataFrame."""
     ext = os.path.splitext(source_uri)[1].lower()
-    key = uri_to_key(source_uri)
 
     if ext == ".parquet":
         import pyarrow.parquet as pq
 
-        data = await _read_bytes(storage, source_uri, key)
+        data = await read_bytes(storage, source_uri)
         table = pq.read_table(io.BytesIO(data))
         return table.to_pandas()
 
     if ext == ".csv":
-        text = await _read_text(storage, source_uri, key)
+        text = await read_text(storage, source_uri)
         return pd.read_csv(io.StringIO(text))
 
     if ext in (".xlsx", ".xls"):
-        data = await _read_bytes(storage, source_uri, key)
+        data = await read_bytes(storage, source_uri)
         return pd.read_excel(io.BytesIO(data))
 
     # JSON / JSONL (text-based)
-    text = await _read_text(storage, source_uri, key)
+    text = await read_text(storage, source_uri)
 
     if ext == ".json":
         parsed = json.loads(text)

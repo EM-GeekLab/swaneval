@@ -47,6 +47,8 @@ class TaskResponse(BaseModel):
 
 
 class SubtaskResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: uuid.UUID
     task_id: uuid.UUID
     run_index: int

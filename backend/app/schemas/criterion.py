@@ -18,6 +18,8 @@ class CriterionUpdate(BaseModel):
 
 
 class CriterionResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: uuid.UUID
     name: str
     type: CriterionType

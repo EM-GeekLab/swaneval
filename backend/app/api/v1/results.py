@@ -190,41 +190,36 @@ async def stability_stats(
     if not subtask_ids:
         return []
 
-    # Get all criteria used
-    crit_stmt = (
+    # Single query: avg score per subtask per criterion
+    agg_stmt = (
         select(
+            EvalResult.subtask_id,
             EvalResult.criterion_id,
             Criterion.name.label("criterion_name"),
+            sa_func.avg(EvalResult.score).label("avg_score"),
         )
         .join(Criterion, EvalResult.criterion_id == Criterion.id)
         .where(
             EvalResult.task_id == task_id,
             EvalResult.is_valid == True,  # noqa: E712
         )
-        .group_by(EvalResult.criterion_id, Criterion.name)
+        .group_by(EvalResult.subtask_id, EvalResult.criterion_id, Criterion.name)
     )
-    criteria_rows = (await session.exec(crit_stmt)).all()
+    agg_rows = (await session.exec(agg_stmt)).all()
+
+    # Organize: {criterion_id: {subtask_id: avg_score}}
+    from collections import defaultdict
+    crit_runs: dict[str, dict[str, float]] = defaultdict(dict)
+    crit_names: dict[str, str] = {}
+    for row in agg_rows:
+        cid = str(row.criterion_id)
+        sid = str(row.subtask_id)
+        crit_runs[cid][sid] = float(row.avg_score)
+        crit_names[cid] = row.criterion_name
 
     results = []
-    for crit_row in criteria_rows:
-        cid = crit_row.criterion_id
-        cname = crit_row.criterion_name
-
-        # Get per-run average scores
-        per_run_scores = []
-        for st in subtasks:
-            run_stmt = select(
-                sa_func.avg(EvalResult.score)
-            ).where(
-                EvalResult.task_id == task_id,
-                EvalResult.subtask_id == st.id,
-                EvalResult.criterion_id == cid,
-                EvalResult.is_valid == True,  # noqa: E712
-            )
-            avg = (await session.exec(run_stmt)).one()
-            if avg is not None:
-                per_run_scores.append(float(avg))
-
+    for cid, runs_map in crit_runs.items():
+        per_run_scores = [runs_map[str(st.id)] for st in subtasks if str(st.id) in runs_map]
         if len(per_run_scores) < 2:
             continue
 
@@ -232,13 +227,12 @@ async def stability_stats(
         mean = sum(per_run_scores) / n
         variance = sum((x - mean) ** 2 for x in per_run_scores) / (n - 1)
         std_dev = math.sqrt(variance)
-        # 95% CI using t-distribution approximation (for small n, use 1.96 as z)
-        t_val = 1.96 if n >= 30 else 2.0  # simplified
+        t_val = 1.96 if n >= 30 else 2.0
         margin = t_val * std_dev / math.sqrt(n)
 
         results.append({
-            "criterion_id": str(cid),
-            "criterion_name": cname,
+            "criterion_id": cid,
+            "criterion_name": crit_names[cid],
             "run_count": n,
             "mean_score": round(mean, 6),
             "std_dev": round(std_dev, 6),
