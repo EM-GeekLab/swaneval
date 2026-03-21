@@ -250,7 +250,10 @@ export default function TaskDetailPage() {
         <TabsList>
           <TabsTrigger value="summary">汇总</TabsTrigger>
           <TabsTrigger value="errors">
-            错误{errors.length > 0 && ` (${errors.length})`}
+            错误
+            {errors.length > 0 && (
+              <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">{errors.length}</Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 

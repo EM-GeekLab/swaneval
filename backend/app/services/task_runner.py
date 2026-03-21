@@ -488,7 +488,8 @@ async def run_task(task_id: uuid.UUID):
                             score = 0.0
                             for attempt in range(3):
                                 try:
-                                    score = run_criterion(
+                                    score = await asyncio.to_thread(
+                                        run_criterion,
                                         criterion.type,
                                         cfg_json,
                                         expected,
