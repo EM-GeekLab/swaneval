@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   Code2,
   Shuffle,
+  AlertCircle,
 } from "lucide-react";
 import { useModels } from "@/lib/hooks/use-models";
 import { useDatasets, useDatasetPreview } from "@/lib/hooks/use-datasets";
@@ -76,6 +77,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ ...emptyForm, dataset_ids: [] as string[], criteria_ids: [] as string[] });
   const [showConfigPreview, setShowConfigPreview] = useState(false);
+  const [importError, setImportError] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const selectedModelName =
@@ -135,40 +137,48 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       {/* JSON import bar */}
       <JsonImportBar
         onImport={(text) => {
-          try {
-            const data = JSON.parse(text);
-            // Parse params_json if it's a string
-            const params = typeof data.params_json === "string"
-              ? (() => { try { return JSON.parse(data.params_json); } catch { return {}; } })()
-              : typeof data.params_json === "object" && data.params_json
-                ? data.params_json
-                : {};
-            const toArr = (v: unknown): string[] => {
-              if (Array.isArray(v)) return v;
-              if (typeof v === "string" && v) return v.split(",").map((s: string) => s.trim()).filter(Boolean);
-              return [];
-            };
-            setForm((f) => ({
-              ...f,
-              name: "",
-              model_id: data.model_id ?? f.model_id,
-              dataset_ids: toArr(data.dataset_ids).length > 0 ? toArr(data.dataset_ids) : f.dataset_ids,
-              criteria_ids: toArr(data.criteria_ids).length > 0 ? toArr(data.criteria_ids) : f.criteria_ids,
-              temperature: String(data.temperature ?? params.temperature ?? f.temperature),
-              max_tokens: String(data.max_tokens ?? params.max_tokens ?? f.max_tokens),
-              limit: String(data.limit ?? params.limit ?? f.limit),
-              repeat_count: String(data.repeat_count ?? f.repeat_count),
-              seed_strategy: data.seed_strategy ?? f.seed_strategy,
-              gpu_ids: data.gpu_ids ?? f.gpu_ids,
-              env_vars: typeof data.env_vars === "object" ? JSON.stringify(data.env_vars, null, 2) : data.env_vars ?? f.env_vars,
-            }));
-            // Jump to step 3 (params/name) and focus name input
-            setStep(2);
-            setTimeout(() => nameInputRef.current?.focus(), 100);
-          } catch { /* ignore invalid JSON */ }
+          const data = JSON.parse(text); // safe: JsonImportBar validates JSON
+          let params: Record<string, unknown> = {};
+          if (typeof data.params_json === "string") {
+            try {
+              params = JSON.parse(data.params_json);
+            } catch {
+              setImportError("params_json 字段 JSON 格式错误，已忽略该字段");
+              setTimeout(() => setImportError(""), 4000);
+            }
+          } else if (typeof data.params_json === "object" && data.params_json) {
+            params = data.params_json;
+          }
+          const toArr = (v: unknown): string[] => {
+            if (Array.isArray(v)) return v;
+            if (typeof v === "string" && v) return v.split(",").map((s: string) => s.trim()).filter(Boolean);
+            return [];
+          };
+          setForm((f) => ({
+            ...f,
+            name: "",
+            model_id: data.model_id ?? f.model_id,
+            dataset_ids: toArr(data.dataset_ids).length > 0 ? toArr(data.dataset_ids) : f.dataset_ids,
+            criteria_ids: toArr(data.criteria_ids).length > 0 ? toArr(data.criteria_ids) : f.criteria_ids,
+            temperature: String(data.temperature ?? params.temperature ?? f.temperature),
+            max_tokens: String(data.max_tokens ?? params.max_tokens ?? f.max_tokens),
+            limit: String(data.limit ?? params.limit ?? f.limit),
+            repeat_count: String(data.repeat_count ?? f.repeat_count),
+            seed_strategy: data.seed_strategy ?? f.seed_strategy,
+            gpu_ids: data.gpu_ids ?? f.gpu_ids,
+            env_vars: typeof data.env_vars === "object" ? JSON.stringify(data.env_vars, null, 2) : data.env_vars ?? f.env_vars,
+          }));
+          setStep(2);
+          setTimeout(() => nameInputRef.current?.focus(), 100);
         }}
         className="mb-2"
       />
+      {importError && (
+        <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive mb-2">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          {importError}
+        </div>
+      )}
 
       {/* Stepper indicator */}
       <Stepper

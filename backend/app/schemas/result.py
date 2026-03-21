@@ -19,6 +19,8 @@ class EvalResultResponse(BaseModel):
     latency_ms: float
     tokens_generated: int
     first_token_ms: float
+    is_valid: bool = True
+    error_category: str | None = None
     created_at: datetime
 
 

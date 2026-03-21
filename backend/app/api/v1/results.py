@@ -46,8 +46,7 @@ async def leaderboard(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Aggregate avg scores per model, per criterion."""
-    # Build query: join EvalResult -> EvalTask -> LLMModel, group by model+criterion
+    """Aggregate avg scores per model, per criterion (valid results only)."""
     stmt = (
         select(
             EvalTask.model_id,
@@ -61,6 +60,7 @@ async def leaderboard(
         .join(EvalTask, EvalResult.task_id == EvalTask.id)
         .join(LLMModel, EvalTask.model_id == LLMModel.id)
         .join(Criterion, EvalResult.criterion_id == Criterion.id)
+        .where(EvalResult.is_valid == True)  # noqa: E712
         .group_by(EvalTask.model_id, LLMModel.name, EvalResult.criterion_id, Criterion.name)
         .order_by(sa_func.avg(EvalResult.score).desc())
     )
@@ -86,13 +86,22 @@ async def leaderboard(
 @router.get("/errors", response_model=PaginatedResultResponse)
 async def error_results(
     task_id: uuid.UUID,
+    error_only: bool = False,
     page: int = 1,
     page_size: int = 50,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return results where score < 1.0 (wrong answers)."""
-    base = select(EvalResult).where(EvalResult.task_id == task_id, EvalResult.score < 1.0)
+    """Return problematic results.
+
+    error_only=False (default): wrong answers (score < 1.0, valid results only)
+    error_only=True: infrastructure failures (is_valid=False)
+    """
+    base = select(EvalResult).where(EvalResult.task_id == task_id)
+    if error_only:
+        base = base.where(EvalResult.is_valid == False)  # noqa: E712
+    else:
+        base = base.where(EvalResult.score < 1.0, EvalResult.is_valid == True)  # noqa: E712
 
     count_stmt = select(sa_func.count()).select_from(base.subquery())
     total = (await session.exec(count_stmt)).one()
@@ -109,7 +118,8 @@ async def task_summary(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Summary stats for a task: avg score per criterion, latency stats."""
+    """Summary stats for a task: avg score per criterion (valid results only), plus error counts."""
+    # Valid results aggregation
     stmt = (
         select(
             EvalResult.criterion_id,
@@ -122,12 +132,21 @@ async def task_summary(
             sa_func.avg(EvalResult.tokens_generated).label("avg_tokens"),
         )
         .join(Criterion, EvalResult.criterion_id == Criterion.id)
-        .where(EvalResult.task_id == task_id)
+        .where(EvalResult.task_id == task_id, EvalResult.is_valid == True)  # noqa: E712
         .group_by(EvalResult.criterion_id, Criterion.name)
     )
     result = await session.exec(stmt)
     rows = result.all()
-    return [
+
+    # Count invalid (error) results for this task
+    error_stmt = (
+        select(sa_func.count())
+        .select_from(EvalResult)
+        .where(EvalResult.task_id == task_id, EvalResult.is_valid == False)  # noqa: E712
+    )
+    error_count = (await session.exec(error_stmt)).one()
+
+    criteria_data = [
         {
             "criterion_id": str(r.criterion_id),
             "criterion_name": r.criterion_name,
@@ -140,3 +159,4 @@ async def task_summary(
         }
         for r in rows
     ]
+    return {"criteria": criteria_data, "error_count": error_count}

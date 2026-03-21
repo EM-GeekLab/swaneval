@@ -8,9 +8,13 @@ back to the converted input JSONL when no per-sample output file is found.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
+from app.errors import ResultIngestionError
 from app.services.storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 PROMPT_KEYS = ("prompt", "query", "input", "question")
 EXPECTED_KEYS = (
@@ -78,26 +82,37 @@ async def _iter_json_rows(
 ) -> list[dict[str, Any]]:
     try:
         text = await storage.read_text(file_key)
-    except Exception:
-        return []
+    except Exception as e:
+        raise ResultIngestionError(
+            f"Failed to read artifact file {file_key}: {e}"
+        ) from e
 
     results: list[dict[str, Any]] = []
+    parse_errors = 0
     if file_key.endswith(".jsonl"):
-        for line in text.splitlines():
+        for i, line in enumerate(text.splitlines()):
             line = line.strip()
             if not line:
                 continue
             try:
                 node = json.loads(line)
             except Exception:
+                parse_errors += 1
                 continue
             results.extend(_walk_dict_nodes(node))
+        if parse_errors > 0:
+            logger.warning(
+                "Ingestor: %d/%d lines failed to parse in %s",
+                parse_errors, parse_errors + len(results), file_key,
+            )
         return results
 
     try:
         node = json.loads(text)
-    except Exception:
-        return []
+    except Exception as e:
+        raise ResultIngestionError(
+            f"Failed to parse JSON artifact {file_key}: {e}"
+        ) from e
     results.extend(_walk_dict_nodes(node))
     return results
 
@@ -134,7 +149,9 @@ def _extract_sample_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "prompt_text": prompt,
         "expected_output": expected,
         "model_output": model_output,
-        "score": score if score is not None else 0.0,
+        "score": score,
+        "is_valid": score is not None,
+        "error_category": None if score is not None else "SCORE_MISSING",
         "latency_ms": latency_ms,
         "first_token_ms": first_token_ms,
         "tokens_generated": tokens_generated,
@@ -206,10 +223,13 @@ async def _fallback_from_input(
 ) -> list[dict[str, Any]]:
     try:
         text = await storage.read_text(input_key)
-    except Exception:
-        return []
+    except Exception as e:
+        raise ResultIngestionError(
+            f"Failed to read fallback input {input_key}: {e}"
+        ) from e
 
     rows: list[dict[str, Any]] = []
+    parse_errors = 0
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -217,6 +237,7 @@ async def _fallback_from_input(
         try:
             node = json.loads(line)
         except Exception:
+            parse_errors += 1
             continue
         if not isinstance(node, dict):
             continue
@@ -235,6 +256,12 @@ async def _fallback_from_input(
                 "latency_ms": 0.0,
                 "first_token_ms": 0.0,
                 "tokens_generated": 0,
+                "is_valid": True,
+                "error_category": None,
             }
+        )
+    if parse_errors > 0:
+        logger.warning(
+            "Ingestor fallback: %d lines failed to parse in %s", parse_errors, input_key,
         )
     return rows

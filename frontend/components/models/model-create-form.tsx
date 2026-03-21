@@ -39,23 +39,20 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
   const [form, setForm] = useState({ ...emptyForm });
 
   const importFromJson = (text: string) => {
-    try {
-      const data = JSON.parse(text);
-      setForm((f) => ({
-        ...f,
-        name: data.name ?? f.name,
-        provider: data.provider ?? f.provider,
-        endpoint_url: data.endpoint_url ?? f.endpoint_url,
-        api_key: data.api_key ?? f.api_key,
-        model_type: data.model_type ?? f.model_type,
-        api_format: data.api_format ?? f.api_format,
-        description: data.description ?? f.description,
-        model_name: data.model_name ?? f.model_name,
-        max_tokens:
-          data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
-      }));
-    } catch {
-    }
+    const data = JSON.parse(text); // safe: JsonImportBar validates JSON
+    setForm((f) => ({
+      ...f,
+      name: data.name ?? f.name,
+      provider: data.provider ?? f.provider,
+      endpoint_url: data.endpoint_url ?? f.endpoint_url,
+      api_key: data.api_key ?? f.api_key,
+      model_type: data.model_type ?? f.model_type,
+      api_format: data.api_format ?? f.api_format,
+      description: data.description ?? f.description,
+      model_name: data.model_name ?? f.model_name,
+      max_tokens:
+        data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
+    }));
   };
 
   const handleCreate = async (e: React.FormEvent) => {

@@ -60,28 +60,26 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
   const [form, setForm] = useState({ ...emptyForm });
 
   const importCriterionJson = (text: string) => {
-    try {
-      const data = JSON.parse(text);
-      const cfg = data.config_json
-        ? typeof data.config_json === "string"
-          ? JSON.parse(data.config_json)
-          : data.config_json
-        : {};
-      setForm((f) => ({
-        ...f,
-        name: data.name ?? f.name,
-        type: data.type ?? f.type,
-        metric: cfg.metric ?? f.metric,
-        pattern: cfg.pattern ?? f.pattern,
-        sandbox_mode: cfg.mode ?? f.sandbox_mode,
-        sandbox_timeout: String(cfg.timeout ?? f.sandbox_timeout),
-        sandbox_script_path: cfg.script_path ?? f.sandbox_script_path,
-        sandbox_entrypoint: cfg.entrypoint ?? f.sandbox_entrypoint,
-        judge_prompt: cfg.system_prompt ?? f.judge_prompt,
-        judge_model_id: cfg.judge_model_id ?? f.judge_model_id,
-      }));
-    } catch {
+    const data = JSON.parse(text); // safe: JsonImportBar validates JSON
+    let cfg: Record<string, unknown> = {};
+    if (data.config_json) {
+      cfg = typeof data.config_json === "string"
+        ? JSON.parse(data.config_json)
+        : data.config_json;
     }
+    setForm((f) => ({
+      ...f,
+      name: (data.name as string) ?? f.name,
+      type: (data.type as string) ?? f.type,
+      metric: (cfg.metric as string) ?? f.metric,
+      pattern: (cfg.pattern as string) ?? f.pattern,
+      sandbox_mode: (cfg.mode as string) ?? f.sandbox_mode,
+      sandbox_timeout: String(cfg.timeout ?? f.sandbox_timeout),
+      sandbox_script_path: (cfg.script_path as string) ?? f.sandbox_script_path,
+      sandbox_entrypoint: (cfg.entrypoint as string) ?? f.sandbox_entrypoint,
+      judge_prompt: (cfg.system_prompt as string) ?? f.judge_prompt,
+      judge_model_id: (cfg.judge_model_id as string) ?? f.judge_model_id,
+    }));
   };
 
   const handleCreate = async (e: React.FormEvent) => {

@@ -32,16 +32,12 @@ def evaluate_regex(pattern: str, actual: str, extract_group: int = 0) -> float:
 
 
 def evaluate_numeric_closeness(expected: str, actual: str, tolerance: float = 0.01) -> float:
-    try:
-        exp_val = float(expected.strip())
-        # Try to extract a number from model output
-        numbers = re.findall(r"-?\d+\.?\d*", actual)
-        if not numbers:
-            return 0.0
-        act_val = float(numbers[-1])
-        return 1.0 if abs(exp_val - act_val) <= tolerance else 0.0
-    except (ValueError, IndexError):
+    exp_val = float(expected.strip())  # raises ValueError if expected is not numeric
+    numbers = re.findall(r"-?\d+\.?\d*", actual)
+    if not numbers:
         return 0.0
+    act_val = float(numbers[-1])
+    return 1.0 if abs(exp_val - act_val) <= tolerance else 0.0
 
 
 def evaluate_bleu(expected: str, actual: str) -> float:
@@ -217,9 +213,11 @@ sys.path.insert(0, '.')
         )
         return 1.0 if result.returncode == 0 else 0.0
     except subprocess.TimeoutExpired:
-        return 0.0
-    except Exception:
-        return 0.0
+        return 0.0  # timeout is a legitimate test failure
+    except subprocess.SubprocessError as e:
+        raise RuntimeError(f"Sandbox subprocess error: {e}") from e
+    except OSError as e:
+        raise RuntimeError(f"Sandbox OS error (missing interpreter?): {e}") from e
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -339,27 +337,29 @@ def run_criterion(criterion_type: str, config_json: str, expected: str, actual: 
 
     if criterion_type == "preset":
         metric = config.get("metric", "exact_match")
-        if metric == "exact_match":
-            return evaluate_exact_match(expected, actual)
-        elif metric == "contains":
-            return evaluate_contains(expected, actual)
-        elif metric == "numeric":
-            return evaluate_numeric_closeness(expected, actual, config.get("tolerance", 0.01))
-        elif metric == "bleu":
-            return evaluate_bleu(expected, actual)
-        elif metric == "rouge_l":
-            return evaluate_rouge_l(expected, actual)
-        elif metric == "f1":
-            return evaluate_f1(expected, actual)
-        elif metric == "cosine_similarity":
-            return evaluate_cosine_similarity(expected, actual)
-        else:
-            return evaluate_exact_match(expected, actual)
+        _PRESET_DISPATCH = {
+            "exact_match": lambda: evaluate_exact_match(expected, actual),
+            "contains": lambda: evaluate_contains(expected, actual),
+            "numeric": lambda: evaluate_numeric_closeness(
+                expected, actual, config.get("tolerance", 0.01),
+            ),
+            "bleu": lambda: evaluate_bleu(expected, actual),
+            "rouge_l": lambda: evaluate_rouge_l(expected, actual),
+            "f1": lambda: evaluate_f1(expected, actual),
+            "cosine_similarity": lambda: evaluate_cosine_similarity(expected, actual),
+        }
+        fn = _PRESET_DISPATCH.get(metric)
+        if fn is None:
+            raise ValueError(
+                f"Unknown preset metric '{metric}'. "
+                f"Valid metrics: {', '.join(sorted(_PRESET_DISPATCH))}"
+            )
+        return fn()
 
     elif criterion_type == "regex":
         pattern = config.get("pattern", "")
         if not pattern:
-            return 0.0
+            raise ValueError("Regex criterion has empty pattern — check config_json")
         return evaluate_regex(pattern, actual, config.get("extract_group", 0))
 
     elif criterion_type in ("sandbox", "script"):

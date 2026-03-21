@@ -7,6 +7,7 @@ import os
 import random
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -17,6 +18,19 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
 from app.database import engine
+from app.errors import (
+    ConfigError,
+    DatasetEmptyError,
+    DatasetNotFoundError,
+    DatasetParseError,
+    EvaluationError,
+    EvaluatorConfigError,
+    InvalidEnvVarsError,
+    ModelAuthError,
+    ModelCallError,
+    ModelRateLimitError,
+    ModelTimeoutError,
+)
 from app.metrics import (
     evaluation_score,
     evaluations_total,
@@ -43,6 +57,17 @@ from app.services.evalscope_result_ingestor import ingest_evalscope_results
 from app.services.evaluators import run_criterion
 from app.services.storage import StorageBackend, get_storage
 from app.services.storage.utils import uri_to_key
+
+
+@dataclass
+class ModelCallResult:
+    """Typed result from a model API call. error is set on failure."""
+
+    output: str
+    latency_ms: float
+    first_token_ms: float
+    tokens_generated: int
+    error: ModelCallError | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -94,76 +119,93 @@ def _should_use_evalscope(params: dict) -> bool:
 async def _load_dataset_rows(
     storage: StorageBackend, source_uri: str
 ) -> list[dict]:
-    """Load dataset rows from any supported format (Parquet, JSON, JSONL, CSV)."""
+    """Load dataset rows from any supported format (Parquet, JSON, JSONL, CSV).
+
+    Raises DatasetNotFoundError if the file doesn't exist,
+    DatasetParseError if it can't be parsed.
+    """
     ext = os.path.splitext(source_uri)[1].lower()
     key = uri_to_key(source_uri)
 
-    # ── Parquet — read as binary, convert via pyarrow ──
-    if ext == ".parquet":
-        import io
+    try:
+        # ── Parquet — read as binary, convert via pyarrow ──
+        if ext == ".parquet":
+            import io
 
-        import pyarrow.parquet as pq
+            import pyarrow.parquet as pq
 
-        if key is not None:
-            if not await storage.exists(key):
-                logger.error("Dataset file not found: %s", key)
-                return []
-            data = await storage.read_file(key)
-        else:
-            p = Path(source_uri)
-            if not p.exists():
-                logger.error("Dataset file not found: %s", source_uri)
-                return []
-            data = await asyncio.to_thread(p.read_bytes)
+            data = await _read_bytes(storage, source_uri, key)
+            table = pq.read_table(io.BytesIO(data))
+            return table.to_pandas().to_dict(orient="records")
 
-        table = pq.read_table(io.BytesIO(data))
-        return table.to_pandas().to_dict(orient="records")
+        # ── CSV ──
+        if ext == ".csv":
+            import io
 
-    # ── CSV ──
-    if ext == ".csv":
-        import io
+            import pandas as pd
 
-        import pandas as pd
+            text = await _read_text(storage, source_uri, key)
+            df = pd.read_csv(io.StringIO(text))
+            return df.fillna("").to_dict(orient="records")
 
+        # ── Text formats: JSON / JSONL ──
         text = await _read_text(storage, source_uri, key)
-        if text is None:
-            return []
-        df = pd.read_csv(io.StringIO(text))
-        return df.fillna("").to_dict(orient="records")
 
-    # ── Text formats: JSON / JSONL ──
-    text = await _read_text(storage, source_uri, key)
-    if text is None:
-        return []
+        if ext == ".json":
+            data = json.loads(text)
+            return data if isinstance(data, list) else [data]
 
-    if ext == ".json":
-        data = json.loads(text)
-        return data if isinstance(data, list) else [data]
+        # JSONL (default)
+        rows: list[dict] = []
+        for i, line in enumerate(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                raise DatasetParseError(
+                    f"JSONL parse error at line {i + 1} in {source_uri}: {e}"
+                ) from e
+        return rows
 
-    # JSONL (default)
-    rows: list[dict] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line:
-            rows.append(json.loads(line))
-    return rows
+    except (DatasetNotFoundError, DatasetParseError):
+        raise
+    except json.JSONDecodeError as e:
+        raise DatasetParseError(f"JSON parse error in {source_uri}: {e}") from e
+    except Exception as e:
+        raise DatasetParseError(f"Failed to read {source_uri}: {e}") from e
+
+
+async def _read_bytes(
+    storage: StorageBackend,
+    source_uri: str,
+    key: str | None,
+) -> bytes:
+    """Read a file as bytes. Raises DatasetNotFoundError if missing."""
+    if key is not None:
+        if not await storage.exists(key):
+            raise DatasetNotFoundError(f"Dataset file not found in storage: {key}")
+        return await storage.read_file(key)
+    p = Path(source_uri)
+    if not p.exists():
+        raise DatasetNotFoundError(f"Dataset file not found on disk: {source_uri}")
+    return await asyncio.to_thread(p.read_bytes)
 
 
 async def _read_text(
     storage: StorageBackend,
     source_uri: str,
     key: str | None,
-) -> str | None:
-    """Read a file as UTF-8 text from storage or filesystem."""
+) -> str:
+    """Read a file as UTF-8 text. Raises DatasetNotFoundError if missing."""
     if key is not None:
         if not await storage.exists(key):
-            logger.error("Dataset file not found: %s", key)
-            return None
+            raise DatasetNotFoundError(f"Dataset file not found in storage: {key}")
         return await storage.read_text(key)
     p = Path(source_uri)
     if not p.exists():
-        logger.error("Dataset file not found: %s", source_uri)
-        return None
+        raise DatasetNotFoundError(f"Dataset file not found on disk: {source_uri}")
     return await asyncio.to_thread(p.read_text, encoding="utf-8")
 
 
@@ -264,12 +306,16 @@ async def _call_model(
     model: LLMModel,
     prompt: str,
     params: dict,
-) -> tuple[str, float, float, int]:
-    """Call an OpenAI-compatible API endpoint."""
+) -> ModelCallResult:
+    """Call an OpenAI-compatible API endpoint.
+
+    Returns ModelCallResult. On failure, result.error is set and
+    result.output is empty — never an error string.
+    """
     headers = {}
     api_key = model.api_key or settings.DEFAULT_MODEL_API_KEY
     if not api_key:
-        raise ValueError(
+        raise ConfigError(
             "Missing api_key: set model.api_key or DEFAULT_MODEL_API_KEY"
         )
     headers["Authorization"] = f"Bearer {api_key}"
@@ -278,7 +324,7 @@ async def _call_model(
         model.endpoint_url or settings.DEFAULT_MODEL_ENDPOINT_URL
     )
     if not endpoint_url:
-        raise ValueError(
+        raise ConfigError(
             "Missing endpoint_url: set model.endpoint_url or DEFAULT_MODEL_ENDPOINT_URL"
         )
     anthropic_mode = getattr(model, "api_format", "openai") == "anthropic"
@@ -289,7 +335,7 @@ async def _call_model(
 
     model_name = model.model_name or model.name or settings.DEFAULT_MODEL_NAME
     if not model_name:
-        raise ValueError(
+        raise ConfigError(
             "Missing model_name: set model.model_name/name or DEFAULT_MODEL_NAME"
         )
 
@@ -319,14 +365,33 @@ async def _call_model(
         model_call_duration_seconds.labels(model_name=model_name).observe(latency_ms / 1000)
         model_tokens_generated.labels(model_name=model_name).inc(tokens)
         task_prompts_processed.inc()
-        return content, latency_ms, first_token_ms, tokens
+        return ModelCallResult(content, latency_ms, first_token_ms, tokens)
 
     except Exception as e:
         latency_ms = (time.perf_counter() - t0) * 1000
         model_calls_total.labels(model_name=model_name, status="error").inc()
         model_call_duration_seconds.labels(model_name=model_name).observe(latency_ms / 1000)
         logger.error("Model call failed: %s", e)
-        return f"[ERROR] {e}", latency_ms, 0.0, 0
+
+        # Classify the error
+        error: ModelCallError
+        if isinstance(e, httpx.TimeoutException):
+            error = ModelTimeoutError(f"Model call timed out: {e}")
+        elif isinstance(e, httpx.HTTPStatusError):
+            status = e.response.status_code
+            if status in (401, 403):
+                error = ModelAuthError(f"Model auth failed (HTTP {status}): {e}")
+            elif status == 429:
+                error = ModelRateLimitError(f"Model rate limited: {e}")
+            else:
+                error = ModelCallError(f"Model HTTP error {status}: {e}")
+        else:
+            error = ModelCallError(f"Model call failed: {e}")
+
+        return ModelCallResult(
+            output="", latency_ms=latency_ms,
+            first_token_ms=0.0, tokens_generated=0, error=error,
+        )
 
 
 def _extract_field(row: dict, keys: list[str]) -> str:
@@ -340,6 +405,28 @@ def _extract_field(row: dict, keys: list[str]) -> str:
         if isinstance(val, str) and val.strip():
             return val
     return ""
+
+
+def _validate_result(result: EvalResult) -> None:
+    """Guard: refuse to persist dirty results.
+
+    Raises ResultIngestionError if the result is in an invalid state.
+    """
+    from app.errors import ResultIngestionError
+
+    if result.model_output.startswith("[ERROR]"):
+        raise ResultIngestionError(
+            f"Refusing dirty result: model_output contains error string: "
+            f"{result.model_output[:80]}"
+        )
+    if not (0.0 <= result.score <= 1.0):
+        raise ResultIngestionError(
+            f"Score out of range [0, 1]: {result.score}"
+        )
+    if not result.is_valid and result.error_category is None:
+        raise ResultIngestionError(
+            "Invalid result must have an error_category"
+        )
 
 
 async def run_task(task_id: uuid.UUID):
@@ -376,12 +463,18 @@ async def run_task(task_id: uuid.UUID):
         if task.env_vars:
             try:
                 env_dict = json.loads(task.env_vars)
+                if not isinstance(env_dict, dict):
+                    raise InvalidEnvVarsError(
+                        f"env_vars must be a JSON object, got {type(env_dict).__name__}"
+                    )
                 for k, v in env_dict.items():
                     if str(k) in _ENV_ALLOWLIST:
                         saved_env[str(k)] = os.environ.get(str(k))
                         os.environ[str(k)] = str(v)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            except (json.JSONDecodeError, TypeError) as e:
+                raise InvalidEnvVarsError(
+                    f"Invalid env_vars JSON: {e}"
+                ) from e
 
         task.status = TaskStatus.running
         task.started_at = datetime.now(timezone.utc)
@@ -424,17 +517,42 @@ async def run_task(task_id: uuid.UUID):
                 await session.commit()
                 return
 
-            # Load datasets
+            # Load datasets — fail explicitly on missing/broken datasets
             all_rows: list[tuple[uuid.UUID, dict]] = []
+            dataset_errors: list[str] = []
             for ds_id in dataset_ids:
                 ds = await session.get(Dataset, ds_id)
                 if not ds:
-                    logger.warning("Task %s: dataset %s not found, skipping", task_id, ds_id)
+                    dataset_errors.append(f"Dataset {ds_id} not found in database")
+                    logger.error("Task %s: dataset %s not found", task_id, ds_id)
                     continue
-                rows = await _load_dataset_rows(storage, ds.source_uri)
+                try:
+                    rows = await _load_dataset_rows(storage, ds.source_uri)
+                except (DatasetNotFoundError, DatasetParseError) as e:
+                    dataset_errors.append(f"Dataset '{ds.name}': {e.detail}")
+                    logger.error("Task %s: %s", task_id, e.detail)
+                    continue
+                if not rows:
+                    dataset_errors.append(f"Dataset '{ds.name}' loaded 0 rows")
+                    logger.warning("Task %s: dataset '%s' has 0 rows", task_id, ds.name)
+                    continue
                 logger.info("Task %s: loaded %d rows from '%s'", task_id, len(rows), ds.name)
                 for row in rows:
                     all_rows.append((ds_id, row))
+
+            if not all_rows:
+                error_summary = (
+                    "; ".join(dataset_errors) if dataset_errors else "all datasets empty"
+                )
+                raise DatasetEmptyError(
+                    f"No rows loaded from any dataset — cannot proceed: {error_summary}"
+                )
+            if dataset_errors:
+                logger.warning(
+                    "Task %s: %d dataset(s) failed but continuing with %d rows: %s",
+                    task_id, len(dataset_errors), len(all_rows),
+                    "; ".join(dataset_errors),
+                )
             logger.info("Task %s: total %d prompt rows to evaluate", task_id, len(all_rows))
 
             # Load criteria
@@ -446,20 +564,25 @@ async def run_task(task_id: uuid.UUID):
                     criteria.append(c)
                     # For llm_judge, resolve judge_model_id to actual credentials
                     if c.type == "llm_judge":
-                        try:
-                            cfg = json.loads(c.config_json) if c.config_json else {}
-                            judge_model_id = cfg.get("judge_model_id")
-                            if judge_model_id:
-                                judge_model = await session.get(LLMModel, uuid.UUID(judge_model_id))
-                                if judge_model:
-                                    cfg["endpoint_url"] = judge_model.endpoint_url
-                                    cfg["api_key"] = judge_model.api_key
-                                    cfg["model_name"] = judge_model.model_name or judge_model.name
-                                    if getattr(judge_model, "api_format", "openai") == "anthropic":
-                                        cfg["api_format"] = "anthropic"
-                            enriched_configs[str(c.id)] = json.dumps(cfg)
-                        except Exception:
-                            enriched_configs[str(c.id)] = c.config_json
+                        cfg = json.loads(c.config_json) if c.config_json else {}
+                        judge_model_id = cfg.get("judge_model_id")
+                        if judge_model_id:
+                            judge_model = await session.get(
+                                LLMModel, uuid.UUID(judge_model_id)
+                            )
+                            if not judge_model:
+                                raise EvaluatorConfigError(
+                                    f"Judge model {judge_model_id} for "
+                                    f"criterion '{c.name}' not found"
+                                )
+                            cfg["endpoint_url"] = judge_model.endpoint_url
+                            cfg["api_key"] = judge_model.api_key
+                            cfg["model_name"] = (
+                                judge_model.model_name or judge_model.name
+                            )
+                            if getattr(judge_model, "api_format", "openai") == "anthropic":
+                                cfg["api_format"] = "anthropic"
+                        enriched_configs[str(c.id)] = json.dumps(cfg)
 
             if not criteria:
                 raise ValueError("No valid criteria found")
@@ -508,6 +631,12 @@ async def run_task(task_id: uuid.UUID):
                 crit_type: str, cfg: str, exp: str, out: str,
                 crit_name: str,
             ) -> float:
+                """Retry criterion evaluation up to 3 times.
+
+                Raises EvaluationError if all attempts fail — never returns
+                a fabricated 0.0 score.
+                """
+                last_err: Exception | None = None
                 for attempt in range(3):
                     try:
                         score = await asyncio.to_thread(
@@ -521,6 +650,7 @@ async def run_task(task_id: uuid.UUID):
                         ).observe(score)
                         return score
                     except Exception as e:
+                        last_err = e
                         if attempt < 2:
                             logger.warning(
                                 "Task %s: '%s' attempt %d/3: %s",
@@ -532,10 +662,12 @@ async def run_task(task_id: uuid.UUID):
                                 criterion_type=crit_type, status="error",
                             ).inc()
                             logger.error(
-                                "Task %s: '%s' failed x3, score=0: %s",
+                                "Task %s: '%s' failed x3: %s",
                                 task_id, crit_name, e,
                             )
-                return 0.0
+                raise EvaluationError(
+                    f"Criterion '{crit_name}' failed after 3 attempts: {last_err}"
+                )
 
             async def _run_subtask(
                 run_idx: int,
@@ -598,7 +730,7 @@ async def run_task(task_id: uuid.UUID):
                                         "answer", "target", "label",
                                     ])
                                 )
-                                out, lat, ft, tok = await _call_model(
+                                mcr = await _call_model(
                                     client, _model_snapshot,
                                     prompt, seed_params,
                                 )
@@ -606,8 +738,30 @@ async def run_task(task_id: uuid.UUID):
                                     logger.info(
                                         "Task %s run %d: %d/%d — %.0fms",
                                         task_id, run_idx + 1,
-                                        idx + 1, total, lat,
+                                        idx + 1, total, mcr.latency_ms,
                                     )
+
+                                # If model call failed, write invalid results
+                                # for all criteria — do NOT score error output
+                                if mcr.error is not None:
+                                    return [
+                                        EvalResult(
+                                            task_id=_task_id,
+                                            subtask_id=subtask_id,
+                                            dataset_id=ds_id,
+                                            criterion_id=c.id,
+                                            prompt_text=prompt,
+                                            expected_output=expected,
+                                            model_output="",
+                                            score=0.0,
+                                            latency_ms=mcr.latency_ms,
+                                            tokens_generated=0,
+                                            first_token_ms=0.0,
+                                            is_valid=False,
+                                            error_category=mcr.error.error_code,
+                                        )
+                                        for c in _criteria_snapshot
+                                    ]
 
                                 async def _score(c):
                                     async with crit_sem:
@@ -615,23 +769,40 @@ async def run_task(task_id: uuid.UUID):
                                         cfg = _enriched_snapshot.get(
                                             cid, c.config_json,
                                         )
-                                        sc = await _eval_crit_retry(
-                                            c.type, cfg, expected, out,
-                                            c.name,
-                                        )
-                                        return EvalResult(
-                                            task_id=_task_id,
-                                            subtask_id=subtask_id,
-                                            dataset_id=ds_id,
-                                            criterion_id=c.id,
-                                            prompt_text=prompt,
-                                            expected_output=expected,
-                                            model_output=out,
-                                            score=sc,
-                                            latency_ms=lat,
-                                            tokens_generated=tok,
-                                            first_token_ms=ft,
-                                        )
+                                        try:
+                                            sc = await _eval_crit_retry(
+                                                c.type, cfg, expected,
+                                                mcr.output, c.name,
+                                            )
+                                            return EvalResult(
+                                                task_id=_task_id,
+                                                subtask_id=subtask_id,
+                                                dataset_id=ds_id,
+                                                criterion_id=c.id,
+                                                prompt_text=prompt,
+                                                expected_output=expected,
+                                                model_output=mcr.output,
+                                                score=sc,
+                                                latency_ms=mcr.latency_ms,
+                                                tokens_generated=mcr.tokens_generated,
+                                                first_token_ms=mcr.first_token_ms,
+                                            )
+                                        except EvaluationError as e:
+                                            return EvalResult(
+                                                task_id=_task_id,
+                                                subtask_id=subtask_id,
+                                                dataset_id=ds_id,
+                                                criterion_id=c.id,
+                                                prompt_text=prompt,
+                                                expected_output=expected,
+                                                model_output=mcr.output,
+                                                score=0.0,
+                                                latency_ms=mcr.latency_ms,
+                                                tokens_generated=mcr.tokens_generated,
+                                                first_token_ms=mcr.first_token_ms,
+                                                is_valid=False,
+                                                error_category=e.error_code,
+                                            )
 
                                 return list(await asyncio.gather(
                                     *[_score(c) for c in _criteria_snapshot]
@@ -646,6 +817,7 @@ async def run_task(task_id: uuid.UUID):
 
                         for prompt_results in batch_results:
                             for r in prompt_results:
+                                _validate_result(r)
                                 sub_session.add(r)
                             completed += 1
 

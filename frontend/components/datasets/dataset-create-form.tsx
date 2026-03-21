@@ -115,26 +115,23 @@ export function DatasetCreateForm({
   }, [dirty, onDirtyChange]);
 
   const importDatasetJson = (text: string) => {
-    try {
-      const data = JSON.parse(text);
-      if (data.server_path || data.source_uri) {
-        setMountForm((f) => ({
-          ...f,
-          name: data.name ?? f.name,
-          server_path: data.server_path ?? data.source_uri ?? f.server_path,
-          format: data.format ?? f.format,
-          tags: data.tags ?? f.tags,
-          description: data.description ?? f.description,
-        }));
-      } else {
-        setUploadForm((f) => ({
-          ...f,
-          name: data.name ?? f.name,
-          tags: data.tags ?? f.tags,
-          description: data.description ?? f.description,
-        }));
-      }
-    } catch {
+    const data = JSON.parse(text); // safe: JsonImportBar validates JSON
+    if (data.server_path || data.source_uri) {
+      setMountForm((f) => ({
+        ...f,
+        name: data.name ?? f.name,
+        server_path: data.server_path ?? data.source_uri ?? f.server_path,
+        format: data.format ?? f.format,
+        tags: data.tags ?? f.tags,
+        description: data.description ?? f.description,
+      }));
+    } else {
+      setUploadForm((f) => ({
+        ...f,
+        name: data.name ?? f.name,
+        tags: data.tags ?? f.tags,
+        description: data.description ?? f.description,
+      }));
     }
   };
 

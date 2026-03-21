@@ -9,10 +9,25 @@ interface JsonImportBarProps {
 
 /**
  * Reusable "Import from clipboard | Import from file" bar.
- * Accepts a JSON string callback. Handles clipboard reading and file reading.
+ * Validates JSON before passing to onImport. Shows inline errors.
  */
 export function JsonImportBar({ onImport, className }: JsonImportBarProps) {
   const [error, setError] = useState("");
+
+  const showError = (msg: string) => {
+    setError(msg);
+    setTimeout(() => setError(""), 4000);
+  };
+
+  const tryImport = (text: string) => {
+    try {
+      JSON.parse(text);
+      onImport(text);
+      setError("");
+    } catch {
+      showError("JSON 格式错误，请检查语法");
+    }
+  };
 
   return (
     <div className={`flex items-center gap-2 text-xs text-muted-foreground ${className ?? ""}`}>
@@ -22,10 +37,9 @@ export function JsonImportBar({ onImport, className }: JsonImportBarProps) {
         onClick={async () => {
           try {
             const text = await navigator.clipboard.readText();
-            onImport(text);
+            tryImport(text);
           } catch {
-            setError("无法读取剪贴板");
-            setTimeout(() => setError(""), 3000);
+            showError("无法读取剪贴板");
           }
         }}
       >
@@ -41,7 +55,7 @@ export function JsonImportBar({ onImport, className }: JsonImportBarProps) {
             const file = e.target.files?.[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = () => onImport(reader.result as string);
+            reader.onload = () => tryImport(reader.result as string);
             reader.readAsText(file);
             e.target.value = "";
           }}
