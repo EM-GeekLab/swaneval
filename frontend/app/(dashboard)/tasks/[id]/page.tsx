@@ -26,6 +26,7 @@ import {
 import { ArrowLeft, Pause, Play, XCircle, RotateCcw, AlertTriangle, Trash2, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { utc } from "@/lib/utils";
+import { estimateEta } from "@/components/tasks/task-constants";
 import {
   useTask,
   useSubtasks,
@@ -221,25 +222,41 @@ export default function TaskDetailPage() {
       {subtasks.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">子任务</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">子任务</CardTitle>
+              {task.status === "running" && (() => {
+                const avgPct = subtasks.reduce((s, st) => s + st.progress_pct, 0) / subtasks.length;
+                const eta = estimateEta(task.started_at, avgPct);
+                return eta ? (
+                  <span className="text-xs text-muted-foreground">预计剩余 {eta}</span>
+                ) : null;
+              })()}
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             {subtasks.map((st) => (
-              <div
-                key={st.id}
-                className="grid items-center gap-3"
-                style={{ gridTemplateColumns: "4rem 1fr 3rem 4.5rem" }}
-              >
-                <span className="text-xs text-muted-foreground">
-                  运行 {st.run_index + 1}
-                </span>
-                <Progress value={st.progress_pct} className="h-2" />
-                <span className="text-xs font-mono text-right">
-                  {st.progress_pct.toFixed(0)}%
-                </span>
-                <Badge variant={statusVariant(st.status)} className="justify-center">
-                  {st.status}
-                </Badge>
+              <div key={st.id} className="space-y-1">
+                <div
+                  className="grid items-center gap-3"
+                  style={{ gridTemplateColumns: "4rem 1fr 3rem 4.5rem" }}
+                >
+                  <span className="text-xs text-muted-foreground">
+                    运行 {st.run_index + 1}
+                  </span>
+                  <Progress value={st.progress_pct} className="h-2" />
+                  <span className="text-xs font-mono text-right">
+                    {st.progress_pct.toFixed(0)}%
+                  </span>
+                  <Badge variant={statusVariant(st.status)} className="justify-center">
+                    {st.status}
+                  </Badge>
+                </div>
+                {st.status === "running" && (() => {
+                  const eta = estimateEta(task.started_at, st.progress_pct);
+                  return eta ? (
+                    <p className="text-[10px] text-muted-foreground pl-[4.5rem]">{eta}</p>
+                  ) : null;
+                })()}
               </div>
             ))}
           </CardContent>

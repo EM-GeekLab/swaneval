@@ -424,7 +424,37 @@ async def run_task(task_id: uuid.UUID):
                 task_id, len(subtasks),
             )
 
-            # Run evaluation
+            # ── Run evaluation with parallel criteria ──
+            MAX_CRITERION_PARALLEL = 4
+
+            async def _eval_criterion_with_retry(
+                crit_type: str, cfg: str, exp: str, out: str,
+                crit_name: str,
+            ) -> float:
+                """Run a single criterion with retries."""
+                for attempt in range(3):
+                    try:
+                        return await asyncio.to_thread(
+                            run_criterion, crit_type, cfg, exp, out,
+                        )
+                    except Exception as e:
+                        if attempt < 2:
+                            logger.warning(
+                                "Task %s: '%s' attempt %d/3: %s",
+                                task_id, crit_name, attempt + 1, e,
+                            )
+                            await asyncio.sleep(2 ** attempt)
+                        else:
+                            logger.error(
+                                "Task %s: '%s' failed x3, score=0: %s",
+                                task_id, crit_name, e,
+                            )
+                return 0.0
+
+            prompt_key = params.get("prompt_field", "")
+            expected_key = params.get("expected_field", "")
+            sem = asyncio.Semaphore(MAX_CRITERION_PARALLEL)
+
             async with httpx.AsyncClient(timeout=180.0) as client:
                 for run_idx, subtask in enumerate(subtasks):
                     run_params = dict(params)
@@ -444,22 +474,22 @@ async def run_task(task_id: uuid.UUID):
                             session.add(subtask)
                             await session.commit()
                             logger.info(
-                                "Task %s stopped (status=%s) at prompt %d/%d",
-                                task_id, task.status, subtask.last_completed_index, len(all_rows),
+                                "Task %s stopped (%s) at %d/%d",
+                                task_id, task.status,
+                                subtask.last_completed_index,
+                                len(all_rows),
                             )
                             return
 
-                        # Use user-specified field mapping, fallback to auto-detect
-                        prompt_key = params.get("prompt_field", "")
                         prompt = (
                             str(row.get(prompt_key, ""))
                             if prompt_key and prompt_key in row
                             else _extract_field(row, [
                                 "prompt", "instruction", "query",
-                                "input", "question", "text", "content",
+                                "input", "question", "text",
+                                "content",
                             ])
                         )
-                        expected_key = params.get("expected_field", "")
                         expected = (
                             str(row.get(expected_key, ""))
                             if expected_key and expected_key in row
@@ -470,63 +500,53 @@ async def run_task(task_id: uuid.UUID):
                         )
 
                         output, latency, first_token, tokens = (
-                            await _call_model(client, model, prompt, run_params)
+                            await _call_model(
+                                client, model, prompt, run_params,
+                            )
                         )
                         idx = subtask.last_completed_index
                         if idx % 10 == 0 or idx == 0:
                             logger.info(
-                                "Task %s run %d: prompt %d/%d — %.0fms, %d tokens",
+                                "Task %s run %d: %d/%d — %.0fms",
                                 task_id, run_idx + 1,
-                                subtask.last_completed_index + 1, len(all_rows),
-                                latency, tokens,
+                                idx + 1, len(all_rows), latency,
                             )
 
-                        for criterion in criteria:
-                            cid = str(criterion.id)
-                            cfg_json = enriched_configs.get(cid, criterion.config_json)
-                            # Retry up to 3 times for transient errors (timeouts, etc.)
-                            score = 0.0
-                            for attempt in range(3):
-                                try:
-                                    score = await asyncio.to_thread(
-                                        run_criterion,
-                                        criterion.type,
-                                        cfg_json,
-                                        expected,
-                                        output,
-                                    )
-                                    break
-                                except Exception as eval_err:
-                                    if attempt < 2:
-                                        logger.warning(
-                                            "Task %s: criterion '%s' failed (attempt %d/3): %s",
-                                            task_id, criterion.name, attempt + 1, eval_err,
-                                        )
-                                        await asyncio.sleep(2 ** attempt)
-                                    else:
-                                        logger.error(
-                                            "Task %s: criterion '%s' failed x3, score=0: %s",
-                                            task_id, criterion.name, eval_err,
-                                        )
+                        # Evaluate all criteria in parallel
+                        async def _eval_one(c, sem=sem):
+                            async with sem:
+                                cid = str(c.id)
+                                cfg = enriched_configs.get(
+                                    cid, c.config_json,
+                                )
+                                sc = await _eval_criterion_with_retry(
+                                    c.type, cfg, expected, output,
+                                    c.name,
+                                )
+                                return EvalResult(
+                                    task_id=task.id,
+                                    subtask_id=subtask.id,
+                                    dataset_id=ds_id,
+                                    criterion_id=c.id,
+                                    prompt_text=prompt,
+                                    expected_output=expected,
+                                    model_output=output,
+                                    score=sc,
+                                    latency_ms=latency,
+                                    tokens_generated=tokens,
+                                    first_token_ms=first_token,
+                                )
 
-                            result = EvalResult(
-                                task_id=task.id,
-                                subtask_id=subtask.id,
-                                dataset_id=ds_id,
-                                criterion_id=criterion.id,
-                                prompt_text=prompt,
-                                expected_output=expected,
-                                model_output=output,
-                                score=score,
-                                latency_ms=latency,
-                                tokens_generated=tokens,
-                                first_token_ms=first_token,
-                            )
-                            session.add(result)
+                        results = await asyncio.gather(
+                            *[_eval_one(c) for c in criteria]
+                        )
+                        for r in results:
+                            session.add(r)
 
                         subtask.last_completed_index += 1
                         subtask.progress_pct = (
-                            subtask.last_completed_index / len(all_rows) * 100
+                            subtask.last_completed_index
+                            / len(all_rows) * 100
                         )
                         session.add(subtask)
                         await session.commit()

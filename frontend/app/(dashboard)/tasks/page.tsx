@@ -48,7 +48,7 @@ import { TablePagination } from "@/components/table-pagination";
 import { TableEmpty, TableLoading } from "@/components/table-states";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { TaskCreateWizard } from "@/components/tasks/task-create-wizard";
-import { statusLabel, statusBadgeVariant, formatDuration } from "@/components/tasks/task-constants";
+import { statusLabel, statusBadgeVariant, formatDuration, estimateEta } from "@/components/tasks/task-constants";
 
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
@@ -141,9 +141,18 @@ export default function TasksPage() {
       },
       {
         accessorKey: "status", header: "状态",
-        cell: ({ getValue }) => {
-          const s = getValue<string>();
-          return <Badge variant={statusBadgeVariant[s] ?? "outline"} className="font-normal">{statusLabel[s] ?? s}</Badge>;
+        cell: ({ row }) => {
+          const s = row.original.status;
+          return (
+            <div className="flex items-center gap-1.5">
+              <Badge variant={statusBadgeVariant[s] ?? "outline"} className="font-normal">{statusLabel[s] ?? s}</Badge>
+              {s === "running" && row.original.started_at && (
+                <span className="text-[10px] text-muted-foreground">
+                  {formatDuration(row.original.started_at, null)}
+                </span>
+              )}
+            </div>
+          );
         },
       },
       {

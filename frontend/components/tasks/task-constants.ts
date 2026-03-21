@@ -21,6 +21,25 @@ export const statusBadgeVariant: Record<
   cancelled: "warning",
 };
 
+/**
+ * Estimate remaining time based on elapsed time and progress percentage.
+ * Returns null if not enough data (< 60s elapsed or < 1% progress).
+ */
+export function estimateEta(
+  startedAt: string | null,
+  progressPct: number,
+): string | null {
+  if (!startedAt || progressPct < 1) return null;
+  const elapsed = (Date.now() - (utc(startedAt)?.getTime() ?? Date.now())) / 1000;
+  if (elapsed < 60) return null;
+  const remaining = (elapsed / progressPct) * (100 - progressPct);
+  const m = Math.floor(remaining / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `约 ${h}h${m % 60}m`;
+  if (m > 0) return `约 ${m}m`;
+  return `约 ${Math.round(remaining)}s`;
+}
+
 export function formatDuration(start: string | null, end: string | null): string {
   if (!start) return "\u2014";
   const s = utc(start)!.getTime();
