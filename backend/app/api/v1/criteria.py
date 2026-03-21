@@ -46,6 +46,42 @@ async def list_preset_criteria():
     return PRESET_CRITERIA
 
 
+@router.get("/templates")
+async def list_judge_templates(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all judge prompt templates (builtin + user-created)."""
+    from app.models.criterion import JudgeTemplate
+    stmt = select(JudgeTemplate).order_by(JudgeTemplate.created_at.desc())
+    result = await session.exec(stmt)
+    return result.all()
+
+
+@router.post("/templates", status_code=201)
+async def create_judge_template(
+    body: dict,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create or update a judge prompt template."""
+    import json as _json
+
+    from app.models.criterion import JudgeTemplate
+    t = JudgeTemplate(
+        name=body.get("name", ""),
+        description=body.get("description", ""),
+        system_prompt=body.get("system_prompt", ""),
+        dimensions=_json.dumps(body.get("dimensions", []), ensure_ascii=False),
+        scale=body.get("scale", 10),
+        created_by=current_user.id,
+    )
+    session.add(t)
+    await session.commit()
+    await session.refresh(t)
+    return t
+
+
 @router.get("", response_model=list[CriterionResponse])
 async def list_criteria(
     session: AsyncSession = Depends(get_db),

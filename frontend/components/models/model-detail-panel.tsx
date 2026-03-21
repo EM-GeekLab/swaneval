@@ -21,16 +21,20 @@ import {
   Pencil,
   Check,
   KeyRound,
+  MessageSquare,
+  ChevronDown,
+  Send,
 } from "lucide-react";
-import { useUpdateModel, useTestModel } from "@/lib/hooks/use-models";
+import { useUpdateModel, useTestModel, usePlayground } from "@/lib/hooks/use-models";
 import type { LLMModel } from "@/lib/types";
-import { utc } from "@/lib/utils";
+import { cn, utc } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
 
 const typeLabel: Record<string, string> = {
   api: "API",
   local: "本地",
   huggingface: "HuggingFace",
+  modelscope: "ModelScope",
 };
 
 const apiFormatLabel: Record<string, string> = {
@@ -51,11 +55,16 @@ export function ModelDetailPanel({
 }: ModelDetailPanelProps) {
   const update = useUpdateModel();
   const testModel = useTestModel();
+  const playground = usePlayground();
 
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; message: string }>
   >({});
+  const [showPlayground, setShowPlayground] = useState(false);
+  const [pgPrompt, setPgPrompt] = useState("");
+  const [pgTemperature, setPgTemperature] = useState("0.7");
+  const [pgMaxTokens, setPgMaxTokens] = useState("512");
 
   const handleTest = async (id: string) => {
     setTestingId(id);
@@ -83,7 +92,27 @@ export function ModelDetailPanel({
     <div className="w-1/3 shrink-0">
       <Card className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-auto">
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h3 className="text-sm font-semibold truncate">{model.name}</h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-sm font-semibold truncate">{model.name}</h3>
+            {model.last_test_ok === true && (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600 shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                在线
+              </span>
+            )}
+            {model.last_test_ok === false && (
+              <span className="flex items-center gap-1 text-[11px] text-destructive shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                离线
+              </span>
+            )}
+            {model.last_test_ok == null && (
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+                未测试
+              </span>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -94,11 +123,18 @@ export function ModelDetailPanel({
           </Button>
         </div>
         <CardContent className="pt-0 space-y-4">
-          {model.description && (
-            <p className="text-xs text-muted-foreground">
-              {model.description}
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            {model.description && (
+              <p className="text-xs text-muted-foreground flex-1">
+                {model.description}
+              </p>
+            )}
+            {model.deploy_status && (
+              <Badge variant="outline" className="text-[10px] shrink-0">
+                {model.deploy_status}
+              </Badge>
+            )}
+          </div>
 
           <div className="space-y-2.5">
             <DetailRow label="提供商" value={model.provider} />
@@ -236,6 +272,90 @@ export function ModelDetailPanel({
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
+          </div>
+
+          {/* Playground */}
+          <div className="border-t pt-3 mt-3">
+            <button
+              onClick={() => setShowPlayground(!showPlayground)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Playground
+              <ChevronDown className={cn("h-3 w-3 transition-transform", showPlayground && "rotate-180")} />
+            </button>
+            {showPlayground && (
+              <div className="mt-3 space-y-2.5">
+                <textarea
+                  value={pgPrompt}
+                  onChange={(e) => setPgPrompt(e.target.value)}
+                  placeholder="输入提示词..."
+                  rows={4}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <label className="text-[11px] text-muted-foreground">温度</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={pgTemperature}
+                      onChange={(e) => setPgTemperature(e.target.value)}
+                      className="h-7 w-16 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-[11px] text-muted-foreground">Token</label>
+                    <Input
+                      type="number"
+                      step="64"
+                      min="1"
+                      value={pgMaxTokens}
+                      onChange={(e) => setPgMaxTokens(e.target.value)}
+                      className="h-7 w-20 text-xs font-mono"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="ml-auto h-7 text-xs"
+                    disabled={!pgPrompt.trim() || playground.isPending}
+                    onClick={() =>
+                      playground.mutate({
+                        model_id: model.id,
+                        prompt: pgPrompt,
+                        temperature: parseFloat(pgTemperature) || 0.7,
+                        max_tokens: parseInt(pgMaxTokens) || 512,
+                      })
+                    }
+                  >
+                    {playground.isPending ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Send className="mr-1 h-3 w-3" />
+                    )}
+                    发送
+                  </Button>
+                </div>
+                {playground.data && (
+                  <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                    <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+                      {playground.data.output}
+                    </pre>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1 border-t">
+                      <span>延迟 {playground.data.latency_ms}ms</span>
+                      <span>{playground.data.tokens_generated} tokens</span>
+                    </div>
+                  </div>
+                )}
+                {playground.isError && (
+                  <div className="rounded-md bg-destructive/10 text-destructive px-3 py-2 text-xs">
+                    请求失败，请检查模型配置
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

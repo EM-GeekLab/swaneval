@@ -51,3 +51,21 @@ class Criterion(SQLModel, table=True):
         sa_type=DateTime(timezone=True),
     )
     # 更新时间 / Last update timestamp
+
+
+class JudgeTemplate(SQLModel, table=True):
+    """Reusable LLM judge prompt templates."""
+    __tablename__ = "judge_templates"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(index=True, max_length=256)
+    description: str = Field(default="")
+    system_prompt: str = Field(default="")
+    dimensions: str = Field(default="[]")  # JSON array of {name, weight, rubric}
+    scale: int = Field(default=10)
+    is_builtin: bool = Field(default=False)
+    created_by: uuid.UUID | None = Field(default=None, foreign_key="users.id")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )

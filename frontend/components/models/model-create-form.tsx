@@ -58,15 +58,19 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const isHF = form.model_type === "huggingface";
+    const isMS = form.model_type === "modelscope";
+    const isManaged = isHF || isMS;
     await create.mutateAsync({
       name: form.name,
-      provider: isHF ? "huggingface" : form.provider,
+      provider: isHF ? "huggingface" : isMS ? "modelscope" : form.provider,
       endpoint_url: isHF
         ? `https://api-inference.huggingface.co/models/${form.model_name}/v1/chat/completions`
-        : form.endpoint_url,
+        : isMS
+          ? `https://api-inference.modelscope.cn/v1/chat/completions`
+          : form.endpoint_url,
       api_key: form.api_key || undefined,
       model_type: form.model_type,
-      api_format: isHF ? "openai" : form.api_format,
+      api_format: isManaged ? "openai" : form.api_format,
       description: form.description || undefined,
       model_name: form.model_name || undefined,
       max_tokens: form.max_tokens ? parseInt(form.max_tokens) : undefined,
@@ -114,6 +118,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                 <SelectItem value="api">API</SelectItem>
                 <SelectItem value="local">本地</SelectItem>
                 <SelectItem value="huggingface">HuggingFace</SelectItem>
+                <SelectItem value="modelscope">ModelScope</SelectItem>
               </SelectContent>
             </Select>
           </PanelField>
@@ -142,6 +147,34 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                   setForm({ ...form, api_key: e.target.value })
                 }
                 placeholder="hf_..."
+                className="font-mono"
+              />
+            </PanelField>
+          </>
+        ) : form.model_type === "modelscope" ? (
+          <>
+            <PanelField label="ModelScope 模型 ID" required>
+              <Input
+                value={form.model_name}
+                onChange={(e) =>
+                  setForm({ ...form, model_name: e.target.value })
+                }
+                placeholder="Qwen/Qwen2.5-0.5B-Instruct"
+                className="font-mono"
+                required
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                ModelScope 模型 ID，将通过 Inference API 调用
+              </p>
+            </PanelField>
+            <PanelField label="MS Token">
+              <Input
+                type="password"
+                value={form.api_key}
+                onChange={(e) =>
+                  setForm({ ...form, api_key: e.target.value })
+                }
+                placeholder="ms_..."
                 className="font-mono"
               />
             </PanelField>

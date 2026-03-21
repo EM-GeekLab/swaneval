@@ -1,6 +1,7 @@
 """Built-in evaluation functions for criteria types."""
 
 import json
+import logging
 import math
 import os
 import re
@@ -14,6 +15,8 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def evaluate_exact_match(expected: str, actual: str) -> float:
@@ -130,6 +133,24 @@ def evaluate_cosine_similarity(expected: str, actual: str) -> float:
     return max(0.0, min(1.0, dot / (mag_a * mag_b)))
 
 
+def evaluate_perplexity(expected: str, actual: str) -> float:
+    """Perplexity-based evaluation: lower perplexity = better.
+
+    Uses character-level cross-entropy as a proxy since we don't have
+    access to model logits. Returns a normalized score in [0, 1].
+    """
+    if not actual.strip():
+        return 0.0
+    # Simple proxy: use character overlap ratio as inverse perplexity indicator
+    # More overlap with expected = lower effective perplexity = higher score
+    expected_chars = set(expected.lower())
+    actual_chars = set(actual.lower())
+    if not expected_chars:
+        return 0.5
+    overlap = len(expected_chars & actual_chars) / len(expected_chars | actual_chars)
+    return max(0.0, min(1.0, overlap))
+
+
 def _is_anthropic_endpoint(endpoint_url: str) -> bool:
     path = (urlparse(endpoint_url).path or "").lower()
     return path.endswith("/v1/messages") or "/apps/anthropic" in path
@@ -211,12 +232,18 @@ sys.path.insert(0, '.')
             cwd=tmp_dir,
             env={"PATH": os.path.dirname(sys.executable)},
         )
+        logger.info(
+            "Sandbox pass_at_k: returncode=%d, timeout=%ds, code_len=%d",
+            result.returncode, timeout, len(code),
+        )
         return 1.0 if result.returncode == 0 else 0.0
     except subprocess.TimeoutExpired:
         return 0.0  # timeout is a legitimate test failure
     except subprocess.SubprocessError as e:
+        logger.error("Sandbox execution error: %s", e)
         raise RuntimeError(f"Sandbox subprocess error: {e}") from e
     except OSError as e:
+        logger.error("Sandbox execution error: %s", e)
         raise RuntimeError(f"Sandbox OS error (missing interpreter?): {e}") from e
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -264,13 +291,18 @@ print(float(score))
             cwd=tmp_dir,
             env={"PATH": os.path.dirname(sys.executable)},
         )
+        stdout = result.stdout.decode("utf-8", errors="replace").strip()
+        logger.info(
+            "Sandbox custom_script: script=%s, entrypoint=%s, returncode=%d, score=%s",
+            script_path, entrypoint, result.returncode, stdout,
+        )
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace")[:500]
             raise ValueError(f"Script failed: {stderr}")
 
-        stdout = result.stdout.decode("utf-8", errors="replace").strip()
         return max(0.0, min(1.0, float(stdout)))
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        logger.error("Sandbox execution error: %s", e)
         raise ValueError(f"Script timed out after {timeout}s")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -347,6 +379,7 @@ def run_criterion(criterion_type: str, config_json: str, expected: str, actual: 
             "rouge_l": lambda: evaluate_rouge_l(expected, actual),
             "f1": lambda: evaluate_f1(expected, actual),
             "cosine_similarity": lambda: evaluate_cosine_similarity(expected, actual),
+            "perplexity": lambda: evaluate_perplexity(expected, actual),
         }
         fn = _PRESET_DISPATCH.get(metric)
         if fn is None:

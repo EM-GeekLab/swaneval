@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Criterion, PresetCriterion } from "@/lib/types";
+import type { Criterion, PresetCriterion, JudgeTemplate } from "@/lib/types";
 
 export function useCriteria() {
   return useQuery({
@@ -69,5 +69,26 @@ export function useTestCriterion() {
       );
       return res.data;
     },
+  });
+}
+
+export function useJudgeTemplates() {
+  return useQuery({
+    queryKey: ["criteria", "templates"],
+    queryFn: async () => {
+      const res = await api.get<JudgeTemplate[]>("/criteria/templates");
+      return res.data;
+    },
+  });
+}
+
+export function useCreateJudgeTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; description?: string; system_prompt: string; dimensions?: unknown[]; scale?: number }) => {
+      const res = await api.post<JudgeTemplate>("/criteria/templates", data);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["criteria", "templates"] }),
   });
 }

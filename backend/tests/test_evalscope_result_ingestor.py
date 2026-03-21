@@ -46,7 +46,7 @@ class TestEvalscopeResultIngestor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sample["prompt_text"], "What is 2+2?")
         self.assertEqual(sample["expected_output"], "4")
         self.assertEqual(sample["model_output"], "4")
-        self.assertEqual(sample["score"], 0.0)
+        self.assertIsNone(sample["score"])  # no score key → None (is_valid=False)
         self.assertEqual(sample["tokens_generated"], 7)
 
         self.assertIsNone(_extract_sample_from_row({"score": 1.0}))

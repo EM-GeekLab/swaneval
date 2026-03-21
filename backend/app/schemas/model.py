@@ -29,6 +29,8 @@ class LLMModelUpdate(BaseModel):
 
 
 class LLMModelResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: uuid.UUID
     name: str
     provider: str
@@ -39,8 +41,26 @@ class LLMModelResponse(BaseModel):
     model_name: str
     max_tokens: int | None
     created_at: datetime
+    deploy_status: str = ""
+    cluster_id: uuid.UUID | None = None
+    source_model_id: str = ""
+    last_test_at: datetime | None = None
+    last_test_ok: bool | None = None
 
 
 class ModelTestResponse(BaseModel):
     ok: bool
     message: str
+
+
+class PlaygroundRequest(BaseModel):
+    prompt: str
+    temperature: float = 0.7
+    max_tokens: int = 2048
+
+
+class PlaygroundResponse(BaseModel):
+    output: str
+    latency_ms: float
+    tokens_generated: int
+    model_name: str

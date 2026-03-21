@@ -40,5 +40,41 @@
     "type": "preset",
     "config_json": "{\"metric\": \"cosine_similarity\"}",
     "description": "基于字符 n-gram 的余弦相似度，衡量文本整体相似程度"
+  },
+  {
+    "name": "Pass@k (代码评测)",
+    "type": "sandbox",
+    "config_json": "{\"mode\": \"pass_at_k\", \"timeout\": 10}",
+    "description": "在沙箱中执行模型生成的代码并运行测试用例，退出码 0 表示通过（1.0），否则为失败（0.0）。适用于 HumanEval、MBPP 等代码生成评测。"
+  },
+  {
+    "name": "LLM-as-a-Judge (通用评判)",
+    "type": "llm_judge",
+    "config_json": "{\"system_prompt\": \"你是一个严格的评估专家。请根据预期答案与实际输出的匹配程度，给出 0 到 1 之间的评分。只返回一个数字。\"}",
+    "description": "使用另一个大语言模型作为评判者，对模型输出进行打分。需要在评测时指定评判模型。"
+  },
+  {
+    "name": "LLM-as-a-Judge (多维度评判)",
+    "type": "llm_judge",
+    "config_json": "{\"system_prompt\": \"你是一个公正的多维度评估专家。请从以下维度分别评估，并给出综合评分（0-1）：\\n1. 准确性：回答是否正确\\n2. 完整性：回答是否完整\\n3. 流畅性：表达是否自然流畅\\n只返回一个综合数字。\", \"dimensions\": [{\"name\": \"准确性\", \"weight\": 0.5, \"rubric\": \"回答与预期是否一致\"}, {\"name\": \"完整性\", \"weight\": 0.3, \"rubric\": \"是否涵盖所有要点\"}, {\"name\": \"流畅性\", \"weight\": 0.2, \"rubric\": \"语言是否自然\"}]}",
+    "description": "多维度 LLM 评判：从准确性、完整性、流畅性三个维度综合评分，支持自定义维度权重和评分细则。"
+  },
+  {
+    "name": "ELO 对比评判",
+    "type": "llm_judge",
+    "config_json": "{\"system_prompt\": \"你是一个公正的评委。请比较以下两段回答的质量。优于预期返回 0.7-1.0，相当返回 0.4-0.6，较差返回 0.0-0.3。只返回一个数字。\"}",
+    "description": "ELO 风格的对比评判：将模型输出与预期答案进行质量对比，返回相对分数。适用于模型间的排名对比。"
+  },
+  {
+    "name": "关键词匹配",
+    "type": "preset",
+    "config_json": "{\"metric\": \"contains\"}",
+    "description": "检查模型输出是否包含指定的关键词或短语。适用于简单的答案验证场景。"
+  },
+  {
+    "name": "数值提取匹配",
+    "type": "preset",
+    "config_json": "{\"metric\": \"numeric\", \"tolerance\": 0.05}",
+    "description": "从模型输出中提取数值并与预期值比较，容差 5%。适用于数学运算、数据分析等需要精确数值的任务。"
   }
 ]

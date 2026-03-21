@@ -53,11 +53,34 @@ export interface LLMModel {
   name: string;
   provider: string;
   endpoint_url: string;
-  model_type: "api" | "local" | "huggingface";
+  model_type: "api" | "local" | "huggingface" | "modelscope";
   api_format: "openai" | "anthropic";
   description: string;
   model_name: string;
   max_tokens: number | null;
+  created_at: string;
+  deploy_status: string;
+  cluster_id: string | null;
+  source_model_id: string;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+}
+
+export interface PlaygroundResponse {
+  output: string;
+  latency_ms: number;
+  tokens_generated: number;
+  model_name: string;
+}
+
+export interface JudgeTemplate {
+  id: string;
+  name: string;
+  description: string;
+  system_prompt: string;
+  dimensions: string;
+  scale: number;
+  is_builtin: boolean;
   created_at: string;
 }
 

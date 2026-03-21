@@ -1,6 +1,6 @@
 import uuid
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
@@ -68,8 +68,8 @@ def _make_model(name: str, created_at: datetime | None = None) -> LLMModel:
         description="desc",
         model_name=f"{name}-upstream",
         max_tokens=4096,
-        created_at=created_at or datetime.utcnow(),
-        updated_at=created_at or datetime.utcnow(),
+        created_at=created_at or datetime.now(timezone.utc),
+        updated_at=created_at or datetime.now(timezone.utc),
     )
 
 
@@ -98,7 +98,7 @@ class TestModelsApi(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.model_name, "gpt-test-1")
         self.assertEqual(created.max_tokens, 2048)
 
-        old = _make_model("old", datetime.utcnow() - timedelta(days=1))
+        old = _make_model("old", datetime.now(timezone.utc) - timedelta(days=1))
         session.add(old)
 
         listed = await list_models(session=cast(Any, session), current_user=cast(Any, user))

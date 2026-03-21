@@ -13,6 +13,7 @@ class ModelType(str, enum.Enum):
     api = "api"
     local = "local"
     huggingface = "huggingface"
+    modelscope = "modelscope"
 
 
 class ApiFormat(str, enum.Enum):
@@ -73,3 +74,19 @@ class LLMModel(SQLModel, table=True):
         sa_type=DateTime(timezone=True),
     )
     # 更新时间 / Last update timestamp
+
+    # ── Deployment & Status Fields ──
+    deploy_status: str = Field(default="")
+    # 部署状态: "", "deploying", "running", "stopped", "failed"
+
+    cluster_id: uuid.UUID | None = Field(default=None, foreign_key="compute_clusters.id")
+    # 部署到的集群ID
+
+    source_model_id: str = Field(default="")
+    # HuggingFace/ModelScope model ID for import metadata
+
+    last_test_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # 上次测试时间
+
+    last_test_ok: bool | None = Field(default=None)
+    # 上次测试结果

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { LLMModel } from "@/lib/types";
+import type { LLMModel, PlaygroundResponse } from "@/lib/types";
 
 export function useModels() {
   return useQuery({
@@ -72,6 +72,16 @@ export function useTestModel() {
       const res = await api.post<{ ok: boolean; message: string }>(
         `/models/${id}/test`
       );
+      return res.data;
+    },
+  });
+}
+
+export function usePlayground() {
+  return useMutation({
+    mutationFn: async (data: { model_id: string; prompt: string; temperature?: number; max_tokens?: number }) => {
+      const { model_id, ...body } = data;
+      const res = await api.post<PlaygroundResponse>(`/models/${model_id}/playground`, body);
       return res.data;
     },
   });
