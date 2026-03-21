@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +64,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ ...emptyForm, dataset_ids: [] as string[], criteria_ids: [] as string[] });
   const [showConfigPreview, setShowConfigPreview] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const selectedModelName =
     models.find((m) => m.id === form.model_id)?.name ?? "";
@@ -106,10 +107,18 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
             const data = JSON.parse(text);
             setForm((f) => ({
               ...f,
-              name: data.name ?? f.name,
+              name: "",
               model_id: data.model_id ?? f.model_id,
-              dataset_ids: data.dataset_ids ?? f.dataset_ids,
-              criteria_ids: data.criteria_ids ?? f.criteria_ids,
+              dataset_ids: Array.isArray(data.dataset_ids)
+                ? data.dataset_ids
+                : typeof data.dataset_ids === "string" && data.dataset_ids
+                  ? data.dataset_ids.split(",").map((s: string) => s.trim()).filter(Boolean)
+                  : f.dataset_ids,
+              criteria_ids: Array.isArray(data.criteria_ids)
+                ? data.criteria_ids
+                : typeof data.criteria_ids === "string" && data.criteria_ids
+                  ? data.criteria_ids.split(",").map((s: string) => s.trim()).filter(Boolean)
+                  : f.criteria_ids,
               temperature: String(data.temperature ?? data.params_json?.temperature ?? f.temperature),
               max_tokens: String(data.max_tokens ?? data.params_json?.max_tokens ?? f.max_tokens),
               limit: String(data.limit ?? data.params_json?.limit ?? f.limit),
@@ -118,6 +127,9 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
               gpu_ids: data.gpu_ids ?? f.gpu_ids,
               env_vars: typeof data.env_vars === "object" ? JSON.stringify(data.env_vars, null, 2) : data.env_vars ?? f.env_vars,
             }));
+            // Jump to step 3 (params/name) and focus name input
+            setStep(2);
+            setTimeout(() => nameInputRef.current?.focus(), 100);
           } catch { /* ignore invalid JSON */ }
         }}
         className="mb-2"
@@ -236,6 +248,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
             <PanelField label="任务名称" required>
               <div className="flex gap-2">
                 <Input
+                  ref={nameInputRef}
                   value={form.name}
                   onChange={(e) =>
                     setForm({ ...form, name: e.target.value })
