@@ -1,24 +1,45 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import {
   Cpu,
   Database,
-  CheckCircle2,
-  AlertTriangle,
   ArrowRight,
   Activity,
   Zap,
   BarChart3,
   Ruler,
+  Clock,
+  Hash,
   TrendingUp,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { useDatasets } from "@/lib/hooks/use-datasets";
 import { useModels } from "@/lib/hooks/use-models";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import { useCriteria } from "@/lib/hooks/use-criteria";
 import { useLeaderboard } from "@/lib/hooks/use-results";
+import { useDashboardMetrics } from "@/lib/hooks/use-metrics";
+import { formatDurationSemantic } from "@/lib/time";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+
+const COLORS = {
+  primary: "#7C3AED",
+  success: "#10b981",
+  error: "#dc2626",
+  warning: "#f59e0b",
+  muted: "#94a3b8",
+};
 
 export default function OverviewPage() {
   const datasets = useDatasets();
@@ -26,257 +47,230 @@ export default function OverviewPage() {
   const { data: criteria = [] } = useCriteria();
   const tasks = useTasks();
   const { data: leaderboard = [] } = useLeaderboard();
+  const { data: metrics } = useDashboardMetrics();
 
-  const [, setTick] = useState(0);
   const allTasks = tasks.data ?? [];
-  const hasRunning = allTasks.some((t) => t.status === "running");
-  useEffect(() => {
-    if (!hasRunning) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [hasRunning]);
+  const tc = metrics?.task_counts ?? {};
+  const runningCount = tc.running ?? 0;
+  const completedCount = tc.completed ?? 0;
+  const failedCount = tc.failed ?? 0;
+  const totalTasks = Object.values(tc).reduce((a, b) => a + b, 0);
+  const successRate = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : null;
 
-  const runningCount = allTasks.filter((t) => t.status === "running").length;
-  const failedCount = allTasks.filter((t) => t.status === "failed").length;
-  const completedCount = allTasks.filter((t) => t.status === "completed").length;
-  const pendingCount = allTasks.filter((t) => t.status === "pending").length;
-  const totalCount = allTasks.length;
-  const hasData = totalCount > 0;
-  const successRate = hasData ? Math.round((completedCount / totalCount) * 100) : null;
-  const topModel = leaderboard.length > 0 ? leaderboard[0] : null;
   const datasetCount =
     (datasets.data as { total?: number })?.total ??
     (datasets.data as { items?: unknown[] })?.items?.length ?? 0;
   const modelCount = models.data?.length ?? 0;
 
-  // Mini bar data: score distribution from leaderboard
-  const scoreBars = useMemo(() => {
-    if (leaderboard.length === 0) return [];
-    const unique = new Map<string, number>();
-    for (const e of leaderboard) {
-      if (!unique.has(e.model_id)) unique.set(e.model_id, e.avg_score);
-    }
-    return Array.from(unique.values())
-      .sort((a, b) => b - a)
-      .slice(0, 8);
-  }, [leaderboard]);
+  // Score distribution chart data
+  const scoreChartData = useMemo(() => {
+    const dist = metrics?.score_distribution ?? {};
+    const buckets = ["0.0-0.3", "0.3-0.5", "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0"];
+    return buckets.map((b) => ({
+      bucket: b,
+      count: dist[b] ?? 0,
+    }));
+  }, [metrics]);
 
-  // Task distribution for donut-like visualization
-  const taskSegments = useMemo(() => {
-    if (totalCount === 0) return [];
-    return [
-      { label: "完成", count: completedCount, color: "bg-primary" },
-      { label: "运行", count: runningCount, color: "bg-amber-500" },
-      { label: "失败", count: failedCount, color: "bg-destructive" },
-      { label: "等待", count: pendingCount, color: "bg-foreground/30" },
-    ].filter((s) => s.count > 0);
-  }, [totalCount, completedCount, runningCount, failedCount, pendingCount]);
+  const hasScoreData = scoreChartData.some((d) => d.count > 0);
+
+  // Recent activity chart
+  const activityData = metrics?.recent_activity ?? [];
+
+  // Latency stats
+  const lat = metrics?.latency ?? { avg_ms: 0, min_ms: 0, max_ms: 0, total_evaluations: 0, avg_tokens: 0 };
 
   return (
-    <div className="dashboard-hero-bg flex flex-col h-[calc(100vh-3.5rem)] -m-6">
-      <div className="d-blob" />
-
-      {/* ── Hero: centered title + subtle metrics ── */}
-      <div className="relative z-10 flex flex-col items-center justify-center pt-12 pb-6 px-6">
-        <h1 className="text-3xl font-bold tracking-tight mb-1">SwanEVAL</h1>
-        <p className="text-sm text-muted-foreground">
-          企业级大模型评测平台
-        </p>
-
-        {/* Status strip */}
-        <div className="flex items-center gap-4 mt-5 text-xs text-muted-foreground">
-          {runningCount > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-              </span>
-              <span className="font-semibold text-foreground tabular-nums">{runningCount}</span>
-              <span>运行中</span>
-            </div>
-          )}
-          {failedCount > 0 && (
-            <div className="flex items-center gap-1.5 text-destructive/70">
-              <AlertTriangle className="h-3 w-3" />
-              <span className="tabular-nums">{failedCount}</span>
-              <span>失败</span>
-            </div>
-          )}
-          {topModel && (
-            <div className="flex items-center gap-1.5">
-              <TrendingUp className="h-3 w-3" />
-              <span>
-                最佳 <span className="font-medium text-foreground">{topModel.model_name}</span>{" "}
-                <span className="tabular-nums">{(topModel.avg_score * 100).toFixed(1)}%</span>
-              </span>
-            </div>
-          )}
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">仪表盘</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">系统概览与关键指标</p>
       </div>
 
-      {/* ── Resource counters: quiet horizontal bar ── */}
-      <div className="relative z-10 shrink-0 px-6 pb-6">
-        <div className="flex items-center justify-center gap-8">
-          {[
-            { icon: Cpu, label: "模型", value: modelCount, href: "/models" },
-            { icon: Database, label: "数据集", value: datasetCount, href: "/datasets" },
-            { icon: Ruler, label: "评测标准", value: criteria.length, href: "/criteria" },
-            { icon: Activity, label: "任务", value: totalCount, href: "/tasks" },
-            { icon: BarChart3, label: "评测记录", value: leaderboard.length, href: "/results" },
-          ].map((m) => (
-            <Link
-              key={m.label}
-              href={m.href}
-              className="group flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <m.icon className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
-              <span className="text-lg font-semibold tabular-nums text-foreground">{m.value}</span>
-              <span className="text-xs">{m.label}</span>
-            </Link>
-          ))}
-        </div>
+      {/* Resource counters */}
+      <div className="grid grid-cols-5 gap-3">
+        {[
+          { icon: Cpu, label: "模型", value: modelCount, href: "/models" },
+          { icon: Database, label: "数据集", value: datasetCount, href: "/datasets" },
+          { icon: Ruler, label: "评测标准", value: criteria.length, href: "/criteria" },
+          { icon: Activity, label: "任务", value: totalTasks, href: "/tasks" },
+          { icon: BarChart3, label: "评测记录", value: lat.total_evaluations, href: "/results" },
+        ].map((m) => (
+          <Link key={m.label} href={m.href}>
+            <Card className="hover:border-primary/30 transition-colors">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="rounded-lg bg-primary/10 p-2">
+                  <m.icon className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold tabular-nums">{m.value}</p>
+                  <p className="text-[11px] text-muted-foreground">{m.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
-      {/* ── Main panels: abstract info + graphs ── */}
-      <div className="relative z-10 flex-1 min-h-0 grid grid-cols-12 gap-4 px-10 pb-4">
+      {/* Main metrics grid */}
+      <div className="grid grid-cols-12 gap-4">
 
-        {/* Left: Task health — filled accent card */}
-        <div className="col-span-4 rounded-2xl bg-primary/[0.06] border border-primary/10 p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">任务概况</span>
-            </div>
-            <Link
-              href="/tasks"
-              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-            >
-              查看 <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {/* Success rate — large number or placeholder */}
-          <div className="flex-1 flex flex-col items-center justify-center">
-            {successRate !== null ? (
-              <>
-                <p className="text-5xl font-bold tabular-nums text-primary">{successRate}%</p>
-                <p className="text-xs text-muted-foreground mt-1">成功率</p>
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 text-muted-foreground/40">
-                <Zap className="h-6 w-6" />
-                <p className="text-xs">暂无任务</p>
+        {/* Task health */}
+        <Card className="col-span-3">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">任务概况</span>
               </div>
-            )}
-
-            {/* Segmented bar */}
-            {taskSegments.length > 0 && (
-              <div className="w-full mt-5 space-y-2">
-                <div className="flex h-2 rounded-full overflow-hidden bg-muted/50">
-                  {taskSegments.map((seg) => (
-                    <div
-                      key={seg.label}
-                      className={`${seg.color} transition-all duration-500`}
-                      style={{ width: `${(seg.count / totalCount) * 100}%` }}
-                    />
-                  ))}
-                </div>
-                <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground">
-                  {taskSegments.map((seg) => (
-                    <div key={seg.label} className="flex items-center gap-1">
-                      <div className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
-                      <span>{seg.label} {seg.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Center: Score distribution — bar sparkline */}
-        <div className="col-span-5 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">模型得分分布</span>
-            </div>
-            <Link
-              href="/results"
-              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-            >
-              排行榜 <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {scoreBars.length > 0 ? (
-            <div className="flex-1 flex items-end gap-1.5 pb-2">
-              {scoreBars.map((score, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] tabular-nums text-muted-foreground">
-                    {(score * 100).toFixed(0)}
-                  </span>
-                  <div
-                    className="w-full rounded-t-md bg-primary/20 transition-all duration-500 min-h-[4px]"
-                    style={{ height: `${Math.max(score * 100, 4)}%` }}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-1.5 text-muted-foreground/40">
-              <BarChart3 className="h-6 w-6" />
-              <p className="text-xs">暂无评测数据</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Quick status */}
-        <div className="col-span-3 flex flex-col gap-4">
-          {/* Running indicator */}
-          <div className="rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-4 flex-1 flex flex-col justify-center">
-            {runningCount > 0 ? (
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1.5 mb-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/60" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-                  </span>
-                  <span className="text-xs font-medium text-amber-600">运行中</span>
-                </div>
-                <p className="text-3xl font-bold tabular-nums">{runningCount}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">个任务</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 text-muted-foreground/40">
-                <CheckCircle2 className="h-6 w-6" />
-                <p className="text-xs">队列空闲</p>
-              </div>
-            )}
-          </div>
-
-          {/* Alerts */}
-          <div className="rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-4 flex-1 flex flex-col justify-center">
-            {failedCount > 0 ? (
-              <Link href="/tasks" className="text-center group">
-                <AlertTriangle className="h-5 w-5 text-destructive/60 mx-auto mb-1.5" />
-                <p className="text-3xl font-bold tabular-nums text-destructive">{failedCount}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 group-hover:text-foreground transition-colors">
-                  失败任务 <ArrowRight className="inline h-2.5 w-2.5" />
-                </p>
+              <Link href="/tasks" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                查看 <ArrowRight className="h-3 w-3" />
               </Link>
+            </div>
+            {successRate !== null ? (
+              <div className="text-center py-2">
+                <p className="text-4xl font-bold tabular-nums text-primary">{successRate}%</p>
+                <p className="text-xs text-muted-foreground mt-1">成功率</p>
+              </div>
             ) : (
-              <div className="flex flex-col items-center gap-1.5 text-muted-foreground/40">
-                <CheckCircle2 className="h-6 w-6" />
-                <p className="text-xs">无异常</p>
+              <div className="text-center py-4 text-muted-foreground/30">
+                <Zap className="h-6 w-6 mx-auto" />
+                <p className="text-xs mt-1">暂无任务</p>
               </div>
             )}
-          </div>
-        </div>
+            {totalTasks > 0 && (
+              <div className="space-y-1.5 text-xs">
+                {[
+                  { label: "完成", count: completedCount, color: "bg-primary" },
+                  { label: "运行中", count: runningCount, color: "bg-amber-500" },
+                  { label: "失败", count: failedCount, color: "bg-destructive" },
+                ].filter((s) => s.count > 0).map((s) => (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className={`h-2 w-2 rounded-full ${s.color}`} />
+                    <span className="text-muted-foreground flex-1">{s.label}</span>
+                    <span className="font-medium tabular-nums">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Score distribution */}
+        <Card className="col-span-5">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">评分分布</span>
+              </div>
+              <Link href="/results" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                排行榜 <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {hasScoreData ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={scoreChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(value: number) => [`${value} 条`, "评测数"]}
+                    labelFormatter={(label) => `分数区间: ${label}`}
+                  />
+                  <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                    {scoreChartData.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={
+                          entry.bucket.startsWith("0.9") ? COLORS.success
+                          : entry.bucket.startsWith("0.8") ? COLORS.primary
+                          : entry.bucket.startsWith("0.0") ? COLORS.error
+                          : COLORS.muted
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[180px] text-muted-foreground/30">
+                <BarChart3 className="h-8 w-8" />
+                <p className="text-xs mt-2">暂无评测数据</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Performance stats */}
+        <Card className="col-span-4">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">性能指标</span>
+            </div>
+            {lat.total_evaluations > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "平均延迟", value: `${lat.avg_ms.toFixed(0)}ms`, icon: Clock },
+                  { label: "平均 Token", value: lat.avg_tokens.toFixed(0), icon: Hash },
+                  { label: "最低延迟", value: `${lat.min_ms.toFixed(0)}ms`, icon: TrendingUp },
+                  { label: "最高延迟", value: `${lat.max_ms.toFixed(0)}ms`, icon: Activity },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg border p-3">
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                    <p className="text-lg font-bold tabular-nums font-mono">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/30">
+                <Clock className="h-6 w-6" />
+                <p className="text-xs mt-1">暂无性能数据</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Recent activity */}
+      {activityData.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">近期活动</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground">最近 7 天</span>
+            </div>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={activityData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => v ? v.slice(5) : ""}
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    value,
+                    name === "completed" ? "完成" : name === "failed" ? "失败" : "总计",
+                  ]}
+                  labelFormatter={(label) => `日期: ${label}`}
+                />
+                <Bar dataKey="completed" fill={COLORS.primary} radius={[2, 2, 0, 0]} stackId="a" />
+                <Bar dataKey="failed" fill={COLORS.error} radius={[2, 2, 0, 0]} stackId="a" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       {/* App info */}
-      <div className="relative z-10 shrink-0 flex items-center justify-center gap-1.5 pb-3 text-[11px] text-muted-foreground/50">
+      <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/50">
         <span>SwanEVAL</span>
         <span className="font-mono">v{process.env.NEXT_PUBLIC_APP_VERSION}{process.env.NEXT_PUBLIC_BUILD_HASH ? `-${process.env.NEXT_PUBLIC_BUILD_HASH}` : ''}</span>
       </div>

@@ -17,6 +17,17 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
 from app.database import engine
+from app.metrics import (
+    evaluation_score,
+    evaluations_total,
+    model_call_duration_seconds,
+    model_calls_total,
+    model_tokens_generated,
+    task_duration_seconds,
+    task_prompts_processed,
+    tasks_running,
+    tasks_total,
+)
 from app.models.criterion import Criterion
 from app.models.dataset import Dataset
 from app.models.eval_result import EvalResult
@@ -304,10 +315,16 @@ async def _call_model(
 
         content, tokens = _extract_model_text(data, anthropic_mode)
         first_token_ms = latency_ms
+        model_calls_total.labels(model_name=model_name, status="success").inc()
+        model_call_duration_seconds.labels(model_name=model_name).observe(latency_ms / 1000)
+        model_tokens_generated.labels(model_name=model_name).inc(tokens)
+        task_prompts_processed.inc()
         return content, latency_ms, first_token_ms, tokens
 
     except Exception as e:
         latency_ms = (time.perf_counter() - t0) * 1000
+        model_calls_total.labels(model_name=model_name, status="error").inc()
+        model_call_duration_seconds.labels(model_name=model_name).observe(latency_ms / 1000)
         logger.error("Model call failed: %s", e)
         return f"[ERROR] {e}", latency_ms, 0.0, 0
 
@@ -368,6 +385,7 @@ async def run_task(task_id: uuid.UUID):
 
         task.status = TaskStatus.running
         task.started_at = datetime.now(timezone.utc)
+        tasks_running.inc()
         session.add(task)
         await session.commit()
         logger.info(
@@ -486,9 +504,16 @@ async def run_task(task_id: uuid.UUID):
             ) -> float:
                 for attempt in range(3):
                     try:
-                        return await asyncio.to_thread(
+                        score = await asyncio.to_thread(
                             run_criterion, crit_type, cfg, exp, out,
                         )
+                        evaluations_total.labels(
+                            criterion_type=crit_type, status="success",
+                        ).inc()
+                        evaluation_score.labels(
+                            criterion_type=crit_type,
+                        ).observe(score)
+                        return score
                     except Exception as e:
                         if attempt < 2:
                             logger.warning(
@@ -497,6 +522,9 @@ async def run_task(task_id: uuid.UUID):
                             )
                             await asyncio.sleep(2 ** attempt)
                         else:
+                            evaluations_total.labels(
+                                criterion_type=crit_type, status="error",
+                            ).inc()
                             logger.error(
                                 "Task %s: '%s' failed x3, score=0: %s",
                                 task_id, crit_name, e,
@@ -646,12 +674,17 @@ async def run_task(task_id: uuid.UUID):
             task.status = TaskStatus.completed
             task.finished_at = datetime.now(timezone.utc)
             elapsed = (task.finished_at - task.started_at).total_seconds()
+            tasks_total.labels(status="completed").inc()
+            tasks_running.dec()
+            task_duration_seconds.observe(elapsed)
             logger.info(
                 "Task %s COMPLETED in %.1fs — %d runs × %d prompts × %d criteria",
                 task_id, elapsed, len(subtasks), len(all_rows), len(criteria),
             )
 
         except Exception as e:
+            tasks_total.labels(status="failed").inc()
+            tasks_running.dec()
             logger.exception("Task %s FAILED: %s", task_id, e)
             # Rollback the failed transaction before updating status
             await session.rollback()

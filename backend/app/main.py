@@ -1,32 +1,37 @@
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.v1 import router as v1_router
 from app.config import settings
 from app.database import init_db
+from app.metrics import (
+    app_info,
+    http_request_duration_seconds,
+    http_requests_total,
+)
 from app.services.dataset_sync import start_sync_loop, stop_sync_loop
 from app.services.storage import get_storage
 
-# 配置日志 / Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    应用生命周期管理 / Application lifespan management
-
-    启动时初始化数据库和存储后端，关闭时清理资源。
-    Initialize database and storage on startup, cleanup on shutdown.
-    """
     await init_db()
 
-    # 初始化存储后端 / Initialize storage backend
+    # Set app info metric
+    app_info.info({
+        "version": "0.3.0",
+        "storage_backend": settings.STORAGE_BACKEND,
+    })
+
     storage = get_storage()
     try:
         await storage.validate()
@@ -36,7 +41,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Storage validation issue (non-fatal): %s", e)
 
-    # S3 模式下设置 AWS 环境变量供 EvalScope/fsspec 使用
     if settings.STORAGE_BACKEND.lower() == "s3":
         if settings.S3_ENDPOINT_URL:
             os.environ.setdefault("AWS_ENDPOINT_URL", settings.S3_ENDPOINT_URL)
@@ -47,45 +51,76 @@ async def lifespan(app: FastAPI):
         if settings.S3_REGION:
             os.environ.setdefault("AWS_DEFAULT_REGION", settings.S3_REGION)
 
-    # 启动数据集订阅同步后台循环 / Start dataset subscription sync background loop
     start_sync_loop()
-
     yield
-
-    # 停止同步循环 / Stop sync loop on shutdown
     stop_sync_loop()
 
 
-# 创建FastAPI应用 / Create FastAPI application
 app = FastAPI(
     title="SwanEVAL API",
-    version="0.1.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
-# 添加CORS中间件 / Add CORS middleware
-# 支持通配符: CORS_ORIGINS='["*"]' 允许所有来源（开发环境）
-# 生产环境建议指定具体域名: CORS_ORIGINS='["https://eval.example.com"]'
+# CORS
 _cors_origins = settings.CORS_ORIGINS
 _allow_all = "*" in _cors_origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if _allow_all else _cors_origins,
-    allow_credentials=not _allow_all,  # credentials 与 * 不能同时使用
+    allow_credentials=not _allow_all,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 包含API路由 / Include API routes
+
+# ── Prometheus instrumentation middleware ─────────────────────────
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    # Skip metrics endpoint itself to avoid recursion
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    method = request.method
+    # Normalize path: replace UUIDs with {id}
+    path = request.url.path
+    parts = path.split("/")
+    normalized = "/".join(
+        "{id}" if len(p) == 36 and "-" in p else p
+        for p in parts
+    )
+
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+
+    http_requests_total.labels(
+        method=method,
+        endpoint=normalized,
+        status=response.status_code,
+    ).inc()
+    http_request_duration_seconds.labels(
+        method=method,
+        endpoint=normalized,
+    ).observe(duration)
+
+    return response
+
+
+# ── Prometheus metrics endpoint ──────────────────────────────────
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
+# API routes
 app.include_router(v1_router)
 
 
 @app.get("/health")
 async def health():
-    """
-    健康检查端点 / Health check endpoint
-
-    用于检查服务是否正常运行。
-    Used to check if the service is running normally.
-    """
     return {"status": "ok"}

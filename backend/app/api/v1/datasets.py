@@ -212,7 +212,11 @@ async def import_dataset(
                 ms_token=current_user.ms_token or None,
             )
         update_job(tracking_id, status="done", progress=1.0, phase="完成")
+        from app.metrics import dataset_imports_total
+        dataset_imports_total.labels(source=body.source, status="success").inc()
     except ValueError as e:
+        from app.metrics import dataset_imports_total
+        dataset_imports_total.labels(source=body.source, status="error").inc()
         error_msg = str(e)
         lower_msg = error_msg.lower()
         if "401" in error_msg or "unauthorized" in lower_msg or "gated" in lower_msg:
