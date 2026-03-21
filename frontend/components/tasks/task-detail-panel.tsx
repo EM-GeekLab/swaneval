@@ -88,6 +88,31 @@ export function TaskDetailPanel({
                 </Badge>
               }
             />
+            {task.total_prompts > 0 && (
+              <DetailRow label="进度" value={
+                <span className="font-mono tabular-nums">
+                  {task.completed_prompts} / {task.total_prompts}
+                  <span className="text-muted-foreground ml-1">
+                    ({Math.round(task.completed_prompts / task.total_prompts * 100)}%)
+                  </span>
+                </span>
+              } />
+            )}
+            {task.execution_backend && task.execution_backend !== "external_api" && (
+              <DetailRow label="执行后端" value={
+                task.execution_backend === "local_worker" ? "本地 Worker" : "K8s / vLLM"
+              } />
+            )}
+            {task.worker_id && (
+              <DetailRow label="Worker" value={
+                <span className="font-mono text-[11px]">{task.worker_id}</span>
+              } />
+            )}
+            {task.error_summary && (
+              <div className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+                {task.error_summary}
+              </div>
+            )}
             <DetailRow
               label="模型"
               value={task.model_name || task.model_id}

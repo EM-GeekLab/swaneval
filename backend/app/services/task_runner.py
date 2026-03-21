@@ -592,23 +592,46 @@ async def run_task(task_id: uuid.UUID):
                 ", ".join(c.name for c in criteria),
             )
 
-            # Create subtasks
-            subtasks: list[EvalSubtask] = []
-            for run_idx in range(task.repeat_count):
-                st = EvalSubtask(
-                    task_id=task.id,
-                    run_index=run_idx,
-                    status=TaskStatus.running,
-                )
-                session.add(st)
-                subtasks.append(st)
-            await session.commit()
-            for st in subtasks:
-                await session.refresh(st)
-            logger.info(
-                "Task %s: created %d subtask(s), starting evaluation",
-                task_id, len(subtasks),
+            # Create or reuse subtasks (for checkpoint resume)
+            existing_stmt = (
+                select(EvalSubtask)
+                .where(EvalSubtask.task_id == task.id)
+                .order_by(EvalSubtask.run_index)
             )
+            existing_subtasks = (await session.exec(existing_stmt)).all()
+
+            if existing_subtasks:
+                # Resume: reuse existing subtasks
+                subtasks = list(existing_subtasks)
+                for st in subtasks:
+                    if st.status != TaskStatus.completed:
+                        st.status = TaskStatus.running
+                        session.add(st)
+                await session.commit()
+                logger.info(
+                    "Task %s: resuming with %d existing subtask(s), "
+                    "%d already completed",
+                    task_id, len(subtasks),
+                    sum(1 for s in subtasks if s.status == TaskStatus.completed),
+                )
+            else:
+                # Fresh start: create new subtasks
+                subtasks = []
+                for run_idx in range(task.repeat_count):
+                    st = EvalSubtask(
+                        task_id=task.id,
+                        run_index=run_idx,
+                        status=TaskStatus.running,
+                    )
+                    session.add(st)
+                    subtasks.append(st)
+                await session.commit()
+                for st in subtasks:
+                    await session.refresh(st)
+                logger.info(
+                    "Task %s: created %d subtask(s), starting evaluation",
+                    task_id, len(subtasks),
+                )
 
             # ── Run evaluation — all subtasks in parallel ──
             # Global semaphore limits total concurrent model calls
@@ -680,11 +703,19 @@ async def run_task(task_id: uuid.UUID):
                     st = await sub_session.get(EvalSubtask, subtask_id)
                     if not st:
                         return
-                    completed = 0
                     total = len(all_rows)
                     batch_size = MAX_MODEL_PARALLEL * 2
 
-                    for batch_start in range(0, total, batch_size):
+                    # Resume from checkpoint: skip already-completed prompts
+                    start_idx = st.last_completed_index if st.last_completed_index > 0 else 0
+                    if start_idx > 0:
+                        logger.info(
+                            "Task %s run %d: resuming from prompt %d/%d",
+                            task_id, run_idx + 1, start_idx, total,
+                        )
+                    completed = start_idx
+
+                    for batch_start in range(start_idx, total, batch_size):
                         # Check for pause/cancel
                         t = await sub_session.get(EvalTask, _task_id)
                         if t and t.status in (
@@ -835,10 +866,12 @@ async def run_task(task_id: uuid.UUID):
                         task_id, run_idx + 1, total,
                     )
 
-            # Launch all subtasks concurrently
+            # Launch non-completed subtasks concurrently
             async with httpx.AsyncClient(timeout=180.0) as client:
                 subtask_coros = []
                 for run_idx, subtask in enumerate(subtasks):
+                    if subtask.status == TaskStatus.completed:
+                        continue  # Already done, skip
                     sp = dict(params)
                     if task.seed_strategy == "random":
                         sp["seed"] = random.randint(0, 2**31)

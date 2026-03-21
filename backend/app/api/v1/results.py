@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func as sa_func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.models.criterion import Criterion
 from app.models.eval_result import EvalResult
-from app.models.eval_task import EvalTask
+from app.models.eval_task import EvalSubtask, EvalTask
 from app.models.llm_model import LLMModel
 from app.models.user import User
 from app.schemas.result import PaginatedResultResponse
@@ -160,3 +160,94 @@ async def task_summary(
         for r in rows
     ]
     return {"criteria": criteria_data, "error_count": error_count}
+
+
+@router.get("/stability-stats")
+async def stability_stats(
+    task_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Aggregated stability statistics for tasks with repeat_count > 1.
+
+    Returns per-criterion: mean, stddev, variance, 95% CI, per-run scores.
+    """
+    import math
+
+    task = await session.get(EvalTask, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task.repeat_count <= 1:
+        raise HTTPException(400, "Stability stats require repeat_count > 1")
+
+    # Get all subtasks for this task
+    sub_stmt = select(EvalSubtask).where(
+        EvalSubtask.task_id == task_id,
+    ).order_by(EvalSubtask.run_index)
+    subtasks = (await session.exec(sub_stmt)).all()
+    subtask_ids = [st.id for st in subtasks]
+
+    if not subtask_ids:
+        return []
+
+    # Get all criteria used
+    crit_stmt = (
+        select(
+            EvalResult.criterion_id,
+            Criterion.name.label("criterion_name"),
+        )
+        .join(Criterion, EvalResult.criterion_id == Criterion.id)
+        .where(
+            EvalResult.task_id == task_id,
+            EvalResult.is_valid == True,  # noqa: E712
+        )
+        .group_by(EvalResult.criterion_id, Criterion.name)
+    )
+    criteria_rows = (await session.exec(crit_stmt)).all()
+
+    results = []
+    for crit_row in criteria_rows:
+        cid = crit_row.criterion_id
+        cname = crit_row.criterion_name
+
+        # Get per-run average scores
+        per_run_scores = []
+        for st in subtasks:
+            run_stmt = select(
+                sa_func.avg(EvalResult.score)
+            ).where(
+                EvalResult.task_id == task_id,
+                EvalResult.subtask_id == st.id,
+                EvalResult.criterion_id == cid,
+                EvalResult.is_valid == True,  # noqa: E712
+            )
+            avg = (await session.exec(run_stmt)).one()
+            if avg is not None:
+                per_run_scores.append(float(avg))
+
+        if len(per_run_scores) < 2:
+            continue
+
+        n = len(per_run_scores)
+        mean = sum(per_run_scores) / n
+        variance = sum((x - mean) ** 2 for x in per_run_scores) / (n - 1)
+        std_dev = math.sqrt(variance)
+        # 95% CI using t-distribution approximation (for small n, use 1.96 as z)
+        t_val = 1.96 if n >= 30 else 2.0  # simplified
+        margin = t_val * std_dev / math.sqrt(n)
+
+        results.append({
+            "criterion_id": str(cid),
+            "criterion_name": cname,
+            "run_count": n,
+            "mean_score": round(mean, 6),
+            "std_dev": round(std_dev, 6),
+            "variance": round(variance, 6),
+            "ci_95_lower": round(max(0, mean - margin), 6),
+            "ci_95_upper": round(min(1, mean + margin), 6),
+            "min_score": round(min(per_run_scores), 6),
+            "max_score": round(max(per_run_scores), 6),
+            "per_run_scores": [round(s, 6) for s in per_run_scores],
+        })
+
+    return results

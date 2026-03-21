@@ -74,6 +74,24 @@ class EvalTask(SQLModel, table=True):
     env_vars: str = Field(default="")
     # 环境变量 JSON / Environment variables JSON (e.g. {"CUDA_VISIBLE_DEVICES": "0"})
 
+    execution_backend: str = Field(default="external_api")
+    # 执行后端: external_api, local_worker, k8s_vllm
+
+    resource_config: str = Field(default="")
+    # 资源配置 JSON: {"gpu_count": 1, "gpu_type": "A100", "memory_gb": 80}
+
+    worker_id: str = Field(default="")
+    # 当前执行此任务的 worker ID
+
+    error_summary: str = Field(default="")
+    # 错误摘要 (failed prompts count, error categories)
+
+    total_prompts: int = Field(default=0)
+    # 总 Prompt 数（创建时计算）
+
+    completed_prompts: int = Field(default=0)
+    # 已完成 Prompt 数
+
     cluster_id: uuid.UUID | None = Field(
         default=None, foreign_key="compute_clusters.id",
     )

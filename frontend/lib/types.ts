@@ -97,9 +97,36 @@ export interface EvalTask {
   seed_strategy: "fixed" | "random";
   gpu_ids: string;
   env_vars: string;
+  execution_backend: string;
+  resource_config: string;
+  worker_id: string;
+  error_summary: string;
+  total_prompts: number;
+  completed_prompts: number;
+  cluster_id: string | null;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+}
+
+export interface QueueStatus {
+  pending: number;
+  running: number;
+  workers: number;
+}
+
+export interface StabilityStats {
+  criterion_id: string;
+  criterion_name: string;
+  run_count: number;
+  mean_score: number;
+  std_dev: number;
+  variance: number;
+  ci_95_lower: number;
+  ci_95_upper: number;
+  min_score: number;
+  max_score: number;
+  per_run_scores: number[];
 }
 
 export interface EvalSubtask {

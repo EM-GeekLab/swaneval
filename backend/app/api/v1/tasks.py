@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,7 +10,7 @@ from app.models.eval_task import EvalSubtask, EvalTask, TaskStatus
 from app.models.llm_model import LLMModel
 from app.models.user import User
 from app.schemas.task import SubtaskResponse, TaskCreate, TaskResponse
-from app.services.task_runner import run_task
+from app.services.task_queue import enqueue_task
 
 
 async def _enrich_task(session: AsyncSession, task: EvalTask) -> TaskResponse:
@@ -32,6 +31,15 @@ async def _enrich_task(session: AsyncSession, task: EvalTask) -> TaskResponse:
         params_json=task.params_json,
         repeat_count=task.repeat_count,
         seed_strategy=task.seed_strategy,
+        gpu_ids=task.gpu_ids or "",
+        env_vars=task.env_vars or "",
+        execution_backend=task.execution_backend or "external_api",
+        resource_config=task.resource_config or "",
+        worker_id=task.worker_id or "",
+        error_summary=task.error_summary or "",
+        total_prompts=task.total_prompts or 0,
+        completed_prompts=task.completed_prompts or 0,
+        cluster_id=task.cluster_id,
         started_at=task.started_at,
         finished_at=task.finished_at,
         created_at=task.created_at,
@@ -57,14 +65,17 @@ async def create_task(
         seed_strategy=body.seed_strategy,
         gpu_ids=body.gpu_ids,
         env_vars=body.env_vars,
+        execution_backend=body.execution_backend,
+        resource_config=body.resource_config,
+        cluster_id=body.cluster_id,
         created_by=current_user.id,
     )
     session.add(task)
     await session.commit()
     await session.refresh(task)
 
-    # Launch task in background
-    asyncio.create_task(run_task(task.id))
+    # Enqueue task for worker execution
+    await enqueue_task(str(task.id))
 
     return await _enrich_task(session, task)
 
@@ -81,6 +92,16 @@ async def list_tasks(
     result = await session.exec(stmt)
     tasks = result.all()
     return [await _enrich_task(session, t) for t in tasks]
+
+
+@router.get("/queue-status")
+async def queue_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Return task queue metrics."""
+    from app.services.task_queue import get_queue_status
+
+    return await get_queue_status()
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -144,7 +165,7 @@ async def resume_task(
     await session.commit()
     await session.refresh(task)
 
-    asyncio.create_task(run_task(task.id))
+    await enqueue_task(str(task.id))
     return await _enrich_task(session, task)
 
 
@@ -203,8 +224,8 @@ async def restart_task(
     session.add(task)
     await session.commit()
     await session.refresh(task)
-    # Launch the task again
-    asyncio.create_task(run_task(task.id))
+    # Enqueue the task again for worker execution
+    await enqueue_task(str(task.id))
     return await _enrich_task(session, task)
 
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { EvalSubtask, EvalTask } from "@/lib/types";
+import type { EvalSubtask, EvalTask, QueueStatus, StabilityStats } from "@/lib/types";
 
 /**
  * Fetch tasks list. Only polls when active tasks exist.
@@ -62,6 +62,30 @@ export function useSubtasks(taskId: string) {
   });
 }
 
+export function useQueueStatus() {
+  return useQuery({
+    queryKey: ["tasks", "queue-status"],
+    queryFn: async () => {
+      const res = await api.get<QueueStatus>("/tasks/queue-status");
+      return res.data;
+    },
+    refetchInterval: 5000,
+  });
+}
+
+export function useStabilityStats(taskId: string) {
+  return useQuery({
+    queryKey: ["results", "stability-stats", taskId],
+    queryFn: async () => {
+      const res = await api.get<StabilityStats[]>("/results/stability-stats", {
+        params: { task_id: taskId },
+      });
+      return res.data;
+    },
+    enabled: !!taskId,
+  });
+}
+
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -75,6 +99,7 @@ export function useCreateTask() {
       seed_strategy?: string;
       gpu_ids?: string;
       env_vars?: string;
+      execution_backend?: string;
     }) => {
       const res = await api.post<EvalTask>("/tasks", data);
       return res.data;

@@ -48,6 +48,7 @@ const emptyForm = {
   seed_strategy: "fixed",
   gpu_ids: "",
   env_vars: "",
+  execution_backend: "external_api",
   field_mappings: {} as Record<string, { prompt_field: string; expected_field: string }>,
 };
 
@@ -128,6 +129,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       seed_strategy: form.seed_strategy,
       gpu_ids: form.gpu_ids || undefined,
       env_vars: form.env_vars || undefined,
+      execution_backend: form.execution_backend,
     });
     onSuccess();
   };
@@ -420,6 +422,24 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
         {/* Step 3: Hardware & Environment */}
         {step === 3 && (
           <>
+            <PanelField label="执行后端">
+              <Select
+                value={form.execution_backend}
+                onValueChange={(v) => setForm({ ...form, execution_backend: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="external_api">外部 API</SelectItem>
+                  <SelectItem value="local_worker">本地 Worker</SelectItem>
+                  <SelectItem value="k8s_vllm">K8s / vLLM</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                选择任务执行方式：外部 API 直接调用模型接口，本地 Worker 在 GPU 服务器运行，K8s/vLLM 在集群部署
+              </p>
+            </PanelField>
             <PanelField label="GPU 编号">
               <Input
                 value={form.gpu_ids}
@@ -536,6 +556,10 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                   value={<span className="font-mono text-[11px]">已配置</span>}
                 />
               )}
+              <DetailRow label="执行后端" value={
+                form.execution_backend === "external_api" ? "外部 API" :
+                form.execution_backend === "local_worker" ? "本地 Worker" : "K8s / vLLM"
+              } />
             </div>
 
             {/* Config JSON preview toggle */}
