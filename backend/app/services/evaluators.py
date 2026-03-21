@@ -157,6 +157,19 @@ def _extract_score_from_text(text: str) -> float:
     return max(0.0, min(1.0, score))
 
 
+def _strip_code_fences(text: str) -> str:
+    """Strip markdown code fences (```python ... ```) from LLM output."""
+    text = text.strip()
+    if text.startswith("```"):
+        # Remove opening fence (with optional language tag)
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline + 1:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
 def evaluate_sandbox(config: dict, expected: str, actual: str) -> float:
     """Dispatch to the correct sandbox mode."""
     if not settings.SANDBOX_ALLOWED:
@@ -175,6 +188,8 @@ def evaluate_sandbox_pass_at_k(
     Returns 1.0 if all tests pass, 0.0 otherwise.
     """
     timeout = config.get("timeout", settings.SANDBOX_TIMEOUT_SECONDS)
+    # Strip markdown code fences that LLMs often wrap code in
+    code = _strip_code_fences(actual)
     tmp_dir = tempfile.mkdtemp(prefix="swaneval_sandbox_")
     try:
         # Combine model code + test cases into a runner script
@@ -183,7 +198,7 @@ import sys
 sys.path.insert(0, '.')
 
 # ---- Model-generated code ----
-{actual}
+{code}
 
 # ---- Test cases ----
 {expected}

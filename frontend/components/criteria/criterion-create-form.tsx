@@ -295,6 +295,29 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
                 </p>
               )}
             </PanelField>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground font-medium">提示词模板</p>
+              <div className="space-y-1">
+                {[
+                  { label: "通用评判", prompt: "你是一个严格的评估专家。请根据预期答案与实际输出的匹配程度，给出 0 到 1 之间的评分。只返回一个数字。" },
+                  { label: "ELO 对比评判", prompt: "你是一个公正的评委。请比较以下两段回答的质量。优于预期返回 0.7-1.0，相当返回 0.4-0.6，较差返回 0.0-0.3。只返回一个数字。" },
+                  { label: "流畅度评估", prompt: "你是一个语言模型专家。请评估以下文本的流畅度和连贯性。1.0 表示完美流畅，0.0 表示完全不连贯。只返回一个 0-1 的数字。" },
+                ].map((t) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    onClick={() => setForm({ ...form, judge_prompt: t.prompt })}
+                    className={`w-full rounded-md border px-2.5 py-1.5 text-left transition-colors text-xs ${
+                      form.judge_prompt === t.prompt
+                        ? "border-primary bg-primary/5"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <PanelField label="系统提示词" required>
               <textarea
                 value={form.judge_prompt}
@@ -305,7 +328,7 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
                   })
                 }
                 placeholder="你是一个评估专家。请根据以下标准对回答打分（0-1）..."
-                className="flex min-h-[120px] w-full rounded-md border border-border bg-muted px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 required
               />
             </PanelField>

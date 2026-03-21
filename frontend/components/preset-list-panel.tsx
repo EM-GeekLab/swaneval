@@ -93,7 +93,7 @@ export function PresetListPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-2 pb-2">
+      <div className="flex-1 overflow-auto px-2 py-1">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin mb-2" />

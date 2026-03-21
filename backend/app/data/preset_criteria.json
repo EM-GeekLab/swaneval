@@ -40,23 +40,5 @@
     "type": "preset",
     "config_json": "{\"metric\": \"cosine_similarity\"}",
     "description": "基于字符 n-gram 的余弦相似度，衡量文本整体相似程度"
-  },
-  {
-    "name": "LLM 评判 (LLM-as-a-Judge)",
-    "type": "llm_judge",
-    "config_json": "{\"system_prompt\": \"你是一个严格的评估专家。请根据预期答案与实际输出的匹配程度，给出 0 到 1 之间的评分。只返回一个数字。\"}",
-    "description": "使用大模型作为裁判评估输出质量，需在任务中配置裁判模型"
-  },
-  {
-    "name": "ELO 评分 (ELO Rating)",
-    "type": "llm_judge",
-    "config_json": "{\"system_prompt\": \"你是一个公正的评委。请比较以下两段回答的质量。优于预期返回 0.7-1.0，相当返回 0.4-0.6，较差返回 0.0-0.3。只返回一个数字。\"}",
-    "description": "基于 LLM 对比评判的 ELO 竞技评分，适用于开放式生成质量的相对排名"
-  },
-  {
-    "name": "困惑度 (Perplexity)",
-    "type": "llm_judge",
-    "config_json": "{\"system_prompt\": \"你是一个语言模型专家。请评估以下文本的流畅度和连贯性。1.0 表示完美流畅，0.0 表示完全不连贯。只返回一个 0-1 的数字。\"}",
-    "description": "通过 LLM 评判近似估计困惑度——评估输出的流畅性和连贯性"
   }
 ]
