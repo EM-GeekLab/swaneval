@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ import {
   Shuffle,
 } from "lucide-react";
 import { useModels } from "@/lib/hooks/use-models";
-import { useDatasets } from "@/lib/hooks/use-datasets";
+import { useDatasets, useDatasetPreview } from "@/lib/hooks/use-datasets";
 import { useCriteria } from "@/lib/hooks/use-criteria";
 import { useCreateTask } from "@/lib/hooks/use-tasks";
 
@@ -47,11 +47,24 @@ const emptyForm = {
   seed_strategy: "fixed",
   gpu_ids: "",
   env_vars: "",
+  prompt_field: "",
+  expected_field: "",
 };
 
 interface TaskCreateWizardProps {
   onSuccess: () => void;
   onClose: () => void;
+}
+
+const PROMPT_FIELDS = ["prompt", "instruction", "query", "input", "question", "text", "content"];
+const EXPECTED_FIELDS = ["expected", "response", "output", "answer", "target", "label"];
+
+function autoDetectField(columns: string[], candidates: string[]): string {
+  for (const c of candidates) {
+    const match = columns.find((col) => col.toLowerCase() === c);
+    if (match) return match;
+  }
+  return "";
 }
 
 export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
@@ -69,6 +82,24 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
   const selectedModelName =
     models.find((m) => m.id === form.model_id)?.name ?? "";
 
+  // Fetch preview of the first selected dataset to detect columns
+  const firstDatasetId = form.dataset_ids[0] ?? "";
+  const { data: previewData } = useDatasetPreview(firstDatasetId, !!firstDatasetId);
+  const datasetColumns = useMemo(() => {
+    if (!previewData?.rows?.length) return [];
+    return Object.keys(previewData.rows[0]);
+  }, [previewData]);
+
+  // Auto-detect field mapping when columns change
+  useEffect(() => {
+    if (datasetColumns.length === 0) return;
+    setForm((f) => ({
+      ...f,
+      prompt_field: f.prompt_field || autoDetectField(datasetColumns, PROMPT_FIELDS),
+      expected_field: f.expected_field || autoDetectField(datasetColumns, EXPECTED_FIELDS),
+    }));
+  }, [datasetColumns]);
+
   const canNext = () => {
     if (step === 0) return !!form.model_id;
     if (step === 1)
@@ -84,6 +115,8 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       max_tokens: parseInt(form.max_tokens),
     };
     if (form.limit) paramsObj.limit = parseInt(form.limit);
+    if (form.prompt_field) paramsObj.prompt_field = form.prompt_field;
+    if (form.expected_field) paramsObj.expected_field = form.expected_field;
     await createTask.mutateAsync({
       name: form.name,
       model_id: form.model_id,
@@ -212,6 +245,56 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                 )}
               </div>
             </PanelField>
+
+            {/* Field mapping — shown when datasets are selected */}
+            {form.dataset_ids.length > 0 && datasetColumns.length > 0 && (
+              <div className="rounded-lg border p-3 space-y-2.5">
+                <p className="text-xs font-medium text-muted-foreground">字段映射</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <PanelField label="输入字段 (Prompt)" required>
+                    <Select
+                      value={form.prompt_field}
+                      onValueChange={(v) => setForm({ ...form, prompt_field: v })}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="选择字段" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {datasetColumns.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            <span className="font-mono">{col}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </PanelField>
+                  <PanelField label="预期输出字段 (Expected)">
+                    <Select
+                      value={form.expected_field || "__none__"}
+                      onValueChange={(v) => setForm({ ...form, expected_field: v === "__none__" ? "" : v })}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="选择字段（可选）" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="text-muted-foreground">无</span>
+                        </SelectItem>
+                        {datasetColumns.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            <span className="font-mono">{col}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </PanelField>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  已自动检测，可手动修改。输入字段将作为 Prompt 发送给模型，预期输出用于评分比较。
+                </p>
+              </div>
+            )}
+
             <PanelField label="选择评测标准" required>
               <div className="flex flex-wrap gap-1.5">
                 {criteria.map((c) => (

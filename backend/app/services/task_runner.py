@@ -449,14 +449,25 @@ async def run_task(task_id: uuid.UUID):
                             )
                             return
 
-                        prompt = _extract_field(row, [
-                            "prompt", "instruction", "query",
-                            "input", "question", "text", "content",
-                        ])
-                        expected = _extract_field(row, [
-                            "expected", "response", "output",
-                            "answer", "target", "label",
-                        ])
+                        # Use user-specified field mapping, fallback to auto-detect
+                        prompt_key = params.get("prompt_field", "")
+                        prompt = (
+                            str(row.get(prompt_key, ""))
+                            if prompt_key and prompt_key in row
+                            else _extract_field(row, [
+                                "prompt", "instruction", "query",
+                                "input", "question", "text", "content",
+                            ])
+                        )
+                        expected_key = params.get("expected_field", "")
+                        expected = (
+                            str(row.get(expected_key, ""))
+                            if expected_key and expected_key in row
+                            else _extract_field(row, [
+                                "expected", "response", "output",
+                                "answer", "target", "label",
+                            ])
+                        )
 
                         output, latency, first_token, tokens = (
                             await _call_model(client, model, prompt, run_params)
