@@ -40,7 +40,7 @@ export function Topbar() {
 
   const handleAccountClick = () => {
     if (user?.role === "admin") {
-      router.push("/admin");
+      router.push(`/admin?user=${user.id}`);
     } else {
       router.push("/account");
     }

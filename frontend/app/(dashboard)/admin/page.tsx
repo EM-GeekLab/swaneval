@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,16 @@ export default function AdminPage() {
   const deleteUser = useDeleteUser();
   const changePassword = useChangePassword();
 
+  const searchParams = useSearchParams();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  // Pre-select user from query param (e.g. admin clicking their own account)
+  useEffect(() => {
+    const userId = searchParams.get("user");
+    if (userId && !selectedUserId) {
+      setSelectedUserId(userId);
+    }
+  }, [searchParams, selectedUserId]);
   const [adminOldPw, setAdminOldPw] = useState("");
   const [adminNewPw, setAdminNewPw] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
