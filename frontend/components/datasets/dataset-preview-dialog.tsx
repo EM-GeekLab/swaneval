@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TablePagination } from "@/components/table-pagination";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, ChevronLeft } from "lucide-react";
 import { useDatasetPreview } from "@/lib/hooks/use-datasets";
 
 const PAGE_SIZE = 20;
@@ -74,19 +74,37 @@ export function DatasetPreviewDialog({ datasetId, onClose }: DatasetPreviewDialo
           ) : allRows.length === 0 ? (
             <p className="text-muted-foreground text-center py-12">暂无数据</p>
           ) : expandedCell ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">行 {expandedCell.row + 1}</Badge>
-                  <Badge variant="secondary" className="text-xs font-mono">{expandedCell.col}</Badge>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setExpandedCell(null)}>
-                  <X className="h-3.5 w-3.5 mr-1" /> 返回表格
-                </Button>
+            /* Record detail view — shows all fields of the selected row */
+            <div className="space-y-4 pb-6">
+              <button
+                type="button"
+                onClick={() => setExpandedCell(null)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                返回表格
+              </button>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs font-mono">行 {expandedCell.row + 1}</Badge>
+                <span className="text-xs text-muted-foreground">{columns.length} 个字段</span>
               </div>
-              <pre className="whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-sm font-mono max-h-[55vh] overflow-auto">
-                {expandedValue}
-              </pre>
+              <div className="space-y-3">
+                {columns.map((col) => {
+                  const val = String(allRows[expandedCell.row]?.[col] ?? "");
+                  const isActive = col === expandedCell.col;
+                  return (
+                    <div key={col} className={`rounded-lg border p-3 ${isActive ? "border-primary/40 bg-primary/[0.03]" : ""}`}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">{col}</span>
+                        <span className="text-[10px] text-muted-foreground/50 font-mono">{val.length} chars</span>
+                      </div>
+                      <pre className="whitespace-pre-wrap break-words text-sm font-mono max-h-[30vh] overflow-auto">
+                        {val || <span className="text-muted-foreground/40">—</span>}
+                      </pre>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <Table>
