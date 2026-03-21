@@ -33,6 +33,18 @@ export function useCriteriaPresets() {
   });
 }
 
+export function useUpdateCriterion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { id: string; name?: string; config_json?: string }) => {
+      const { id, ...body } = data;
+      const res = await api.put<Criterion>(`/criteria/${id}`, body);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["criteria"] }),
+  });
+}
+
 export function useDeleteCriterion() {
   const qc = useQueryClient();
   return useMutation({
