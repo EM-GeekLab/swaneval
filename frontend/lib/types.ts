@@ -102,6 +102,8 @@ export interface EvalResult {
   latency_ms: number;
   tokens_generated: number;
   first_token_ms: number;
+  is_valid: boolean;
+  error_category: string | null;
   created_at: string;
 }
 
@@ -209,4 +211,62 @@ export interface ClusterNode {
   cpu_millicores: number;
   memory_bytes: number;
   status: string;
+}
+
+export interface DatasetVersion {
+  id: string;
+  dataset_id: string;
+  version: number;
+  file_path: string;
+  changelog: string;
+  row_count: number;
+  size_bytes: number;
+  format: string;
+  created_at: string;
+}
+
+export interface SyncLog {
+  id: string;
+  dataset_id: string;
+  triggered_by: string;
+  status: string;
+  old_version: number;
+  new_version: number | null;
+  old_row_count: number;
+  new_row_count: number | null;
+  error_message: string;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface DatasetStats {
+  row_count: number;
+  column_count: number;
+  size_bytes: number;
+  columns: ColumnStats[];
+}
+
+export interface ColumnStats {
+  name: string;
+  dtype: string;
+  null_count: number;
+  null_pct: number;
+  unique_count: number;
+  avg_text_len: number | null;
+  min_text_len: number | null;
+  max_text_len: number | null;
+  top_values: { value: string; count: number }[];
+  sample_values: string[];
+}
+
+export interface PreflightResult {
+  source_type: string;
+  format: string;
+  row_count: number;
+  size_bytes: number;
+  columns: string[];
+  sample_rows: Record<string, unknown>[];
+  field_types: Record<string, string>;
+  warnings: string[];
+  preflight_token: string;
 }

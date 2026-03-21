@@ -62,13 +62,65 @@ class DatasetResponse(BaseModel):
 
 
 class DatasetVersionResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: uuid.UUID
     dataset_id: uuid.UUID
     version: int
     file_path: str
     changelog: str
     row_count: int
+    size_bytes: int = 0
+    format: str = ""
     created_at: datetime
+
+
+class SyncLogResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    triggered_by: str
+    status: str
+    old_version: int
+    new_version: int | None
+    old_row_count: int
+    new_row_count: int | None
+    error_message: str
+    duration_ms: int
+    created_at: datetime
+
+
+class PreflightResponse(BaseModel):
+    """Result of two-stage import: preflight check."""
+    source_type: str
+    format: str
+    row_count: int
+    size_bytes: int
+    columns: list[str]
+    sample_rows: list[dict[str, Any]]
+    field_types: dict[str, str]  # column -> inferred type
+    warnings: list[str]
+    # Opaque token to pass to confirm endpoint
+    preflight_token: str
+
+
+class PreflightConfirmRequest(BaseModel):
+    """Confirm a preflight import."""
+    preflight_token: str
+    name: str
+    description: str = ""
+    tags: str = ""
+
+
+class DatasetStatsResponse(BaseModel):
+    """Statistical summary of a dataset."""
+    row_count: int
+    column_count: int
+    size_bytes: int
+    # Each entry: name, dtype, null_count, null_pct, sample_values,
+    # avg_text_len, unique_count, top_values
+    columns: list[dict[str, Any]]
 
 
 class PaginatedResponse(BaseModel):

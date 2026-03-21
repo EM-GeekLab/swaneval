@@ -125,8 +125,34 @@ class DatasetVersion(SQLModel, table=True):
     row_count: int = Field(default=0)
     # 该版本的行数 / Row count for this version
 
+    size_bytes: int = Field(default=0)
+    # 该版本文件大小(字节) / File size in bytes for this version
+
+    format: str = Field(default="")
+    # 该版本的数据格式 / Data format for this version
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_type=DateTime(timezone=True),
     )
     # 创建时间 / Creation timestamp
+
+
+class SyncLog(SQLModel, table=True):
+    """Sync history record for auto-update subscriptions."""
+    __tablename__ = "sync_logs"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    dataset_id: uuid.UUID = Field(foreign_key="datasets.id", index=True)
+    triggered_by: str = Field(default="auto")  # "auto" or "manual"
+    status: str = Field(default="")  # syncing, synced, failed, up_to_date
+    old_version: int = Field(default=0)
+    new_version: int | None = Field(default=None)
+    old_row_count: int = Field(default=0)
+    new_row_count: int | None = Field(default=None)
+    error_message: str = Field(default="")
+    duration_ms: int = Field(default=0)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )

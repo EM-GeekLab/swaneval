@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import json
 import os
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
@@ -10,19 +12,27 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.models.dataset import Dataset, DatasetVersion, SourceType
+from app.models.dataset import Dataset, DatasetVersion, SourceType, SyncLog
 from app.models.eval_result import EvalResult
 from app.models.user import User
 from app.schemas.dataset import (
     DatasetImportRequest,
     DatasetMountRequest,
     DatasetResponse,
+    DatasetStatsResponse,
     DatasetSubscribeRequest,
+    DatasetVersionResponse,
     PaginatedResponse,
+    PreflightConfirmRequest,
+    PreflightResponse,
+    SyncLogResponse,
 )
 from app.services.dataset_deletion import cleanup_uploaded_file, delete_dataset_versions
 from app.services.storage import StorageBackend, get_storage
 from app.services.storage.utils import uri_to_key
+
+# In-memory preflight cache: token -> {source_uri, format, row_count, ...}
+_preflight_cache: dict[str, dict] = {}
 
 router = APIRouter()
 
@@ -166,6 +176,8 @@ async def upload_dataset(
         file_path=uri,
         changelog="Initial upload" if version == 1 else f"Version {version}",
         row_count=row_count,
+        size_bytes=len(content),
+        format=fmt,
     )
     session.add(dv)
     await session.commit()
@@ -260,6 +272,8 @@ async def import_dataset(
         file_path=source_uri,
         changelog=f"Imported from {body.source}: {body.dataset_id}",
         row_count=row_count,
+        size_bytes=size_bytes,
+        format=ext or "jsonl",
     )
     session.add(dv)
     await session.commit()
@@ -587,7 +601,7 @@ async def sync_dataset_now(
             "Only HuggingFace/preset datasets can be synced",
         )
 
-    result = await check_and_sync_dataset(dataset_id)
+    result = await check_and_sync_dataset(dataset_id, triggered_by="manual")
     if result.startswith("failed:"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, result[7:])
 
@@ -612,6 +626,12 @@ async def delete_dataset(
     for r in results:
         await session.delete(r)
 
+    # Delete sync logs
+    log_stmt = select(SyncLog).where(SyncLog.dataset_id == dataset_id)
+    logs = (await session.exec(log_stmt)).all()
+    for log in logs:
+        await session.delete(log)
+
     # Delete dataset versions (must flush before deleting parent)
     await delete_dataset_versions(session, ds.id)
     await session.flush()
@@ -619,3 +639,318 @@ async def delete_dataset(
     await cleanup_uploaded_file(storage, ds)
     await session.delete(ds)
     await session.commit()
+
+
+# ── Two-Stage Import: Preflight + Confirm ──────────────────────────
+
+
+@router.post("/preflight", response_model=PreflightResponse)
+async def preflight_import(
+    file: UploadFile | None = None,
+    source: str = Form(""),
+    dataset_id: str = Form(""),
+    subset: str = Form(""),
+    split: str = Form("test"),
+    server_path: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(_get_storage),
+):
+    """Stage 1: Preview data, detect format, identify fields, validate.
+
+    Supports all source types: upload file, HuggingFace, ModelScope, server path.
+    Returns a preflight_token to use with /confirm.
+    """
+    from app.services.dataset_stats import _infer_dtype, _load_dataframe
+
+    warnings: list[str] = []
+    source_uri = ""
+    fmt = ""
+    size_bytes = 0
+
+    if file and file.filename:
+        # Upload source
+        ext = os.path.splitext(file.filename)[1].lower()
+        fmt = ext.lstrip(".") or "jsonl"
+        content = await file.read()
+        size_bytes = len(content)
+        file_id = uuid.uuid4()
+        key = f"preflight/{file_id}{ext}"
+        source_uri = await storage.write_file(key, content)
+        source_type = "upload"
+
+    elif server_path:
+        # Server path source
+        if not os.path.exists(server_path):
+            raise HTTPException(400, f"Server path not found: {server_path}")
+        source_uri = server_path
+        ext = os.path.splitext(server_path)[1].lower()
+        fmt = ext.lstrip(".") or "jsonl"
+        size_bytes = os.path.getsize(server_path)
+        source_type = "server_path"
+
+    elif source in ("huggingface", "modelscope") and dataset_id:
+        # Online source — download to staging area
+        from app.services.dataset_import import import_huggingface, import_modelscope
+
+        try:
+            if source == "huggingface":
+                source_uri, row_count, size_bytes = await import_huggingface(
+                    dataset_id, subset, split, storage,
+                    hf_token=current_user.hf_token or None,
+                )
+            else:
+                source_uri, row_count, size_bytes = await import_modelscope(
+                    dataset_id, subset, split, storage,
+                    ms_token=current_user.ms_token or None,
+                )
+        except Exception as e:
+            raise HTTPException(400, f"Preflight download failed: {e}") from e
+        ext = os.path.splitext(source_uri)[1].lower()
+        fmt = ext.lstrip(".") or "jsonl"
+        source_type = source
+    else:
+        raise HTTPException(400, "Provide a file, server_path, or source+dataset_id")
+
+    # Load sample data
+    try:
+        df = await _load_dataframe(storage, source_uri)
+    except Exception as e:
+        raise HTTPException(400, f"Cannot parse file: {e}") from e
+
+    row_count = len(df)
+    columns = list(df.columns)
+    sample_rows = df.head(10).fillna("").to_dict(orient="records")
+
+    # Field type inference
+    field_types = {}
+    for col in df.columns:
+        field_types[col] = _infer_dtype(df[col])
+
+    # Validation warnings
+    if row_count == 0:
+        warnings.append("数据集为空（0行）")
+    if row_count > 0:
+        null_cols = [
+            col for col in df.columns
+            if df[col].isna().sum() / row_count > 0.5
+        ]
+        if null_cols:
+            warnings.append(f"以下字段空值率超过 50%: {', '.join(null_cols)}")
+
+    # Generate preflight token and cache
+    token = hashlib.sha256(
+        f"{source_uri}:{time.time()}".encode()
+    ).hexdigest()[:32]
+    _preflight_cache[token] = {
+        "source_uri": source_uri,
+        "source_type": source_type,
+        "format": fmt,
+        "row_count": row_count,
+        "size_bytes": size_bytes,
+        "hf_dataset_id": dataset_id if source in ("huggingface", "modelscope") else "",
+        "hf_subset": subset,
+        "hf_split": split,
+        "created_at": time.time(),
+    }
+
+    return PreflightResponse(
+        source_type=source_type,
+        format=fmt,
+        row_count=row_count,
+        size_bytes=size_bytes,
+        columns=columns,
+        sample_rows=sample_rows,
+        field_types=field_types,
+        warnings=warnings,
+        preflight_token=token,
+    )
+
+
+@router.post("/confirm", response_model=DatasetResponse, status_code=201)
+async def confirm_import(
+    body: PreflightConfirmRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 2: Confirm preflight and commit dataset to database."""
+    cached = _preflight_cache.pop(body.preflight_token, None)
+    if not cached:
+        raise HTTPException(400, "Invalid or expired preflight token")
+
+    # Check expiry (30 minutes)
+    if time.time() - cached["created_at"] > 1800:
+        raise HTTPException(400, "Preflight token expired (30 min limit)")
+
+    source_type_map = {
+        "upload": SourceType.upload,
+        "server_path": SourceType.server_path,
+        "huggingface": SourceType.huggingface,
+        "modelscope": SourceType.modelscope,
+    }
+    st = source_type_map.get(cached["source_type"], SourceType.upload)
+
+    # Auto-version
+    stmt = (
+        select(Dataset).where(Dataset.name == body.name)
+        .order_by(Dataset.version.desc())
+    )
+    existing = (await session.exec(stmt)).first()
+    version = (existing.version + 1) if existing else 1
+
+    ds = Dataset(
+        name=body.name,
+        description=body.description,
+        source_type=st,
+        source_uri=cached["source_uri"],
+        format=cached["format"],
+        tags=body.tags,
+        version=version,
+        size_bytes=cached["size_bytes"],
+        row_count=cached["row_count"],
+        created_by=current_user.id,
+        hf_dataset_id=cached.get("hf_dataset_id", ""),
+        hf_subset=cached.get("hf_subset", ""),
+        hf_split=cached.get("hf_split", ""),
+    )
+    session.add(ds)
+    await session.commit()
+    await session.refresh(ds)
+
+    dv = DatasetVersion(
+        dataset_id=ds.id,
+        version=version,
+        file_path=cached["source_uri"],
+        changelog="Initial import" if version == 1 else f"Version {version}",
+        row_count=cached["row_count"],
+        size_bytes=cached["size_bytes"],
+        format=cached["format"],
+    )
+    session.add(dv)
+    await session.commit()
+    await session.refresh(ds)
+    return ds
+
+
+# ── Version Management ─────────────────────────────────────────────
+
+
+@router.get("/{dataset_id}/versions", response_model=list[DatasetVersionResponse])
+async def list_versions(
+    dataset_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all versions of a dataset, newest first."""
+    ds = await session.get(Dataset, dataset_id)
+    if not ds:
+        raise HTTPException(404, "Dataset not found")
+    stmt = (
+        select(DatasetVersion)
+        .where(DatasetVersion.dataset_id == dataset_id)
+        .order_by(DatasetVersion.version.desc())
+    )
+    result = await session.exec(stmt)
+    return result.all()
+
+
+@router.get(
+    "/{dataset_id}/versions/{version}/preview",
+)
+async def preview_version(
+    dataset_id: uuid.UUID,
+    version: int,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(_get_storage),
+):
+    """Preview rows from a specific dataset version."""
+    stmt = (
+        select(DatasetVersion)
+        .where(
+            DatasetVersion.dataset_id == dataset_id,
+            DatasetVersion.version == version,
+        )
+    )
+    dv = (await session.exec(stmt)).first()
+    if not dv:
+        raise HTTPException(404, "Version not found")
+
+    # Reuse the same preview logic but with the version's file_path
+    from app.services.dataset_stats import _load_dataframe
+
+    try:
+        df = await _load_dataframe(storage, dv.file_path)
+    except Exception:
+        return {"rows": [], "total": 0}
+
+    rows = df.head(limit).fillna("").to_dict(orient="records")
+    return {"rows": rows, "total": len(df)}
+
+
+# ── Dataset Statistics ─────────────────────────────────────────────
+
+
+@router.get("/{dataset_id}/stats", response_model=DatasetStatsResponse)
+async def dataset_stats(
+    dataset_id: uuid.UUID,
+    version: int | None = None,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(_get_storage),
+):
+    """Compute statistical summary for a dataset (or specific version)."""
+    from app.services.dataset_stats import compute_dataset_stats
+
+    ds = await session.get(Dataset, dataset_id)
+    if not ds:
+        raise HTTPException(404, "Dataset not found")
+
+    source_uri = ds.source_uri
+    size_bytes = ds.size_bytes
+
+    # If version specified, use that version's file
+    if version is not None:
+        stmt = select(DatasetVersion).where(
+            DatasetVersion.dataset_id == dataset_id,
+            DatasetVersion.version == version,
+        )
+        dv = (await session.exec(stmt)).first()
+        if not dv:
+            raise HTTPException(404, f"Version {version} not found")
+        source_uri = dv.file_path
+        size_bytes = dv.size_bytes or ds.size_bytes
+
+    if not source_uri:
+        raise HTTPException(400, "Dataset has no content")
+
+    try:
+        stats = await compute_dataset_stats(storage, source_uri, size_bytes)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+
+    return stats
+
+
+# ── Sync Logs ──────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{dataset_id}/sync-logs",
+    response_model=list[SyncLogResponse],
+)
+async def list_sync_logs(
+    dataset_id: uuid.UUID,
+    limit: int = 20,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List sync history for a dataset."""
+    stmt = (
+        select(SyncLog)
+        .where(SyncLog.dataset_id == dataset_id)
+        .order_by(SyncLog.created_at.desc())
+        .limit(limit)
+    )
+    result = await session.exec(stmt)
+    return result.all()

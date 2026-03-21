@@ -14,7 +14,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import engine
-from app.models.dataset import Dataset, DatasetVersion, SourceType
+from app.models.dataset import Dataset, DatasetVersion, SourceType, SyncLog
 from app.services.dataset_import import import_huggingface, import_modelscope
 from app.services.storage import get_storage
 
@@ -34,13 +34,18 @@ def _get_hf_latest_sha(dataset_id: str) -> str | None:
         return None
 
 
-async def check_and_sync_dataset(dataset_id) -> str:
-    """
-    Check a single dataset for updates and sync if needed.
+async def check_and_sync_dataset(
+    dataset_id, triggered_by: str = "auto"
+) -> str:
+    """Check a single dataset for updates and sync if needed.
 
     Returns a status string: "synced", "up_to_date", or "failed:<reason>".
+    Writes a SyncLog record for every check.
     """
+    import time as _time
+
     storage = get_storage()
+    t0 = _time.monotonic()
 
     async with AsyncSession(engine) as session:
         ds = await session.get(Dataset, dataset_id)
@@ -51,29 +56,35 @@ async def check_and_sync_dataset(dataset_id) -> str:
         if not hf_id:
             return "failed:no dataset ID"
 
+        old_version = ds.version
+        old_row_count = ds.row_count
+
         ds.sync_status = "syncing"
         session.add(ds)
         await session.commit()
 
         try:
-            # Check if the remote repo has changed
             if ds.source_type in (SourceType.huggingface, SourceType.preset):
                 latest_sha = await asyncio.to_thread(_get_hf_latest_sha, hf_id)
                 if latest_sha and latest_sha == ds.hf_last_sha:
                     ds.sync_status = "synced"
                     ds.last_synced_at = datetime.now(timezone.utc)
                     session.add(ds)
+                    elapsed = int((_time.monotonic() - t0) * 1000)
+                    session.add(SyncLog(
+                        dataset_id=ds.id, triggered_by=triggered_by,
+                        status="up_to_date", old_version=old_version,
+                        old_row_count=old_row_count, duration_ms=elapsed,
+                    ))
                     await session.commit()
                     return "up_to_date"
 
-                # Download new version
                 source_uri, row_count, size_bytes = await import_huggingface(
                     hf_id, ds.hf_subset, ds.hf_split, storage,
                 )
                 new_sha = latest_sha or ""
 
             elif ds.source_type == SourceType.modelscope:
-                # ModelScope — always re-download (no SHA check available)
                 source_uri, row_count, size_bytes = await import_modelscope(
                     hf_id, ds.hf_subset, ds.hf_split, storage,
                 )
@@ -82,15 +93,28 @@ async def check_and_sync_dataset(dataset_id) -> str:
             else:
                 ds.sync_status = "failed"
                 session.add(ds)
+                elapsed = int((_time.monotonic() - t0) * 1000)
+                session.add(SyncLog(
+                    dataset_id=ds.id, triggered_by=triggered_by,
+                    status="failed", old_version=old_version,
+                    old_row_count=old_row_count, duration_ms=elapsed,
+                    error_message="unsupported source type",
+                ))
                 await session.commit()
                 return "failed:unsupported source type"
 
-            # Check if content actually changed (compare row count + size)
+            # Check if content actually changed
             if row_count == ds.row_count and size_bytes == ds.size_bytes:
                 ds.sync_status = "synced"
                 ds.last_synced_at = datetime.now(timezone.utc)
                 ds.hf_last_sha = new_sha
                 session.add(ds)
+                elapsed = int((_time.monotonic() - t0) * 1000)
+                session.add(SyncLog(
+                    dataset_id=ds.id, triggered_by=triggered_by,
+                    status="up_to_date", old_version=old_version,
+                    old_row_count=old_row_count, duration_ms=elapsed,
+                ))
                 await session.commit()
                 return "up_to_date"
 
@@ -106,14 +130,26 @@ async def check_and_sync_dataset(dataset_id) -> str:
             ds.hf_last_sha = new_sha
             session.add(ds)
 
+            import os
+            ext = os.path.splitext(source_uri)[1].lstrip(".")
             dv = DatasetVersion(
                 dataset_id=ds.id,
                 version=new_version,
                 file_path=source_uri,
                 changelog=f"Auto-synced: {row_count} rows ({size_bytes} bytes)",
                 row_count=row_count,
+                size_bytes=size_bytes,
+                format=ext or "jsonl",
             )
             session.add(dv)
+
+            elapsed = int((_time.monotonic() - t0) * 1000)
+            session.add(SyncLog(
+                dataset_id=ds.id, triggered_by=triggered_by,
+                status="synced", old_version=old_version,
+                new_version=new_version, old_row_count=old_row_count,
+                new_row_count=row_count, duration_ms=elapsed,
+            ))
             await session.commit()
 
             logger.info(
@@ -127,6 +163,13 @@ async def check_and_sync_dataset(dataset_id) -> str:
             ds.sync_status = "failed"
             ds.last_synced_at = datetime.now(timezone.utc)
             session.add(ds)
+            elapsed = int((_time.monotonic() - t0) * 1000)
+            session.add(SyncLog(
+                dataset_id=ds.id, triggered_by=triggered_by,
+                status="failed", old_version=old_version,
+                old_row_count=old_row_count, duration_ms=elapsed,
+                error_message=str(e)[:500],
+            ))
             await session.commit()
             return f"failed:{e}"
 

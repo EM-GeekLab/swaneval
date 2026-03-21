@@ -54,6 +54,9 @@ class EvalTask(SQLModel, table=True):
     criteria_ids: str = Field(default="")  # comma-separated UUIDs
     # 标准ID列表 / Criterion IDs (comma-separated UUIDs)
 
+    dataset_version_id: str = Field(default="")
+    # 数据集版本ID列表 / Comma-separated version IDs binding tasks to specific dataset versions
+
     params_json: str = Field(default='{"temperature": 0.7, "max_tokens": 1024}')
     # 参数JSON / Parameters JSON (temperature, max_tokens, etc)
 
