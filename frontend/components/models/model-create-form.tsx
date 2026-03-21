@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { JsonImportBar } from "@/components/json-import-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PanelField } from "@/components/panel-helpers";
@@ -36,10 +37,8 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
   const create = useCreateModel();
 
   const [form, setForm] = useState({ ...emptyForm });
-  const [importError, setImportError] = useState("");
 
   const importFromJson = (text: string) => {
-    setImportError("");
     try {
       const data = JSON.parse(text);
       setForm((f) => ({
@@ -56,19 +55,6 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
           data.max_tokens != null ? String(data.max_tokens) : f.max_tokens,
       }));
     } catch {
-      setImportError("无法解析 JSON");
-      setTimeout(() => setImportError(""), 3000);
-    }
-  };
-
-  const importFromClipboard = async () => {
-    setImportError("");
-    try {
-      const text = await navigator.clipboard.readText();
-      importFromJson(text);
-    } catch {
-      setImportError("剪贴板内容不是有效的 JSON");
-      setTimeout(() => setImportError(""), 3000);
     }
   };
 
@@ -93,36 +79,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-        <button
-          type="button"
-          className="hover:text-foreground transition-colors"
-          onClick={importFromClipboard}
-        >
-          从剪贴板导入
-        </button>
-        <span className="text-border">|</span>
-        <label className="hover:text-foreground transition-colors cursor-pointer">
-          <input
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () =>
-                importFromJson(reader.result as string);
-              reader.readAsText(file);
-              e.target.value = "";
-            }}
-          />
-          从 JSON 导入
-        </label>
-        {importError && (
-          <span className="text-destructive">{importError}</span>
-        )}
-      </div>
+      <JsonImportBar onImport={importFromJson} className="mb-3" />
 
       <form onSubmit={handleCreate} className="space-y-3">
         <PanelField label="显示名称" required>

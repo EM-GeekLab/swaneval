@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { JsonImportBar } from "@/components/json-import-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,10 +57,8 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
   const { data: models = [] } = useModels();
 
   const [form, setForm] = useState({ ...emptyForm });
-  const [importError, setImportError] = useState("");
 
   const importCriterionJson = (text: string) => {
-    setImportError("");
     try {
       const data = JSON.parse(text);
       const cfg = data.config_json
@@ -80,8 +79,6 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
         judge_model_id: cfg.judge_model_id ?? f.judge_model_id,
       }));
     } catch {
-      setImportError("无法解析 JSON");
-      setTimeout(() => setImportError(""), 3000);
     }
   };
 
@@ -118,44 +115,7 @@ export function CriterionCreateForm({ onSuccess, onClose: _onClose }: CriterionC
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-        <button
-          type="button"
-          className="hover:text-foreground transition-colors"
-          onClick={async () => {
-            try {
-              const text = await navigator.clipboard.readText();
-              importCriterionJson(text);
-            } catch {
-              setImportError("无法读取剪贴板");
-              setTimeout(() => setImportError(""), 3000);
-            }
-          }}
-        >
-          从剪贴板导入
-        </button>
-        <span className="text-border">|</span>
-        <label className="hover:text-foreground transition-colors cursor-pointer">
-          <input
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () =>
-                importCriterionJson(reader.result as string);
-              reader.readAsText(file);
-              e.target.value = "";
-            }}
-          />
-          从 JSON 导入
-        </label>
-        {importError && (
-          <span className="text-destructive">{importError}</span>
-        )}
-      </div>
+      <JsonImportBar onImport={importCriterionJson} className="mb-3" />
 
       <form onSubmit={handleCreate} className="space-y-3">
         <div className="grid grid-cols-2 gap-2">

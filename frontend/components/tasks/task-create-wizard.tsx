@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PanelField, DetailRow } from "@/components/panel-helpers";
+import { Stepper } from "@/components/ui/stepper";
+import { JsonImportBar } from "@/components/json-import-bar";
 import {
   Select,
   SelectContent,
@@ -18,6 +20,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Code2,
+  Shuffle,
 } from "lucide-react";
 import { useModels } from "@/lib/hooks/use-models";
 import { useDatasets } from "@/lib/hooks/use-datasets";
@@ -96,18 +99,38 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
 
   return (
     <>
+      {/* JSON import bar */}
+      <JsonImportBar
+        onImport={(text) => {
+          try {
+            const data = JSON.parse(text);
+            setForm((f) => ({
+              ...f,
+              name: data.name ?? f.name,
+              model_id: data.model_id ?? f.model_id,
+              dataset_ids: data.dataset_ids ?? f.dataset_ids,
+              criteria_ids: data.criteria_ids ?? f.criteria_ids,
+              temperature: String(data.temperature ?? data.params_json?.temperature ?? f.temperature),
+              max_tokens: String(data.max_tokens ?? data.params_json?.max_tokens ?? f.max_tokens),
+              limit: String(data.limit ?? data.params_json?.limit ?? f.limit),
+              repeat_count: String(data.repeat_count ?? f.repeat_count),
+              seed_strategy: data.seed_strategy ?? f.seed_strategy,
+              gpu_ids: data.gpu_ids ?? f.gpu_ids,
+              env_vars: typeof data.env_vars === "object" ? JSON.stringify(data.env_vars, null, 2) : data.env_vars ?? f.env_vars,
+            }));
+          } catch { /* ignore invalid JSON */ }
+        }}
+        className="mb-2"
+      />
+
       {/* Stepper indicator */}
-      <ul className="steps steps-horizontal w-full pb-3 pt-2 text-xs">
-        {STEPS.map((s, i) => (
-          <li
-            key={i}
-            className={`step cursor-pointer ${i <= step ? "step-primary" : ""}`}
-            onClick={() => i < step && setStep(i)}
-          >
-            {s.title}
-          </li>
-        ))}
-      </ul>
+      <Stepper
+        steps={STEPS}
+        activeStep={step}
+        onStepClick={(i) => setStep(i)}
+        className="pb-4 pt-2"
+      />
+
       <div className="space-y-3">
         {/* Step 0: Select model */}
         {step === 0 && (
@@ -211,14 +234,31 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
         {step === 2 && (
           <>
             <PanelField label="任务名称" required>
-              <Input
-                value={form.name}
-                onChange={(e) =>
-                  setForm({ ...form, name: e.target.value })
-                }
-                placeholder="评测任务名称"
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm({ ...form, name: e.target.value })
+                  }
+                  placeholder="评测任务名称"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="生成随机名称"
+                  onClick={() => {
+                    const id = crypto.randomUUID().slice(0, 8);
+                    const model = models.find((m) => m.id === form.model_id);
+                    const prefix = model ? model.name.slice(0, 10) : "task";
+                    setForm({ ...form, name: `${prefix}-${id}` });
+                  }}
+                >
+                  <Shuffle className="h-4 w-4" />
+                </Button>
+              </div>
             </PanelField>
             <div className="grid grid-cols-2 gap-2">
               <PanelField label="温度">

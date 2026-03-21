@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { JsonImportBar } from "@/components/json-import-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PanelField } from "@/components/panel-helpers";
@@ -87,7 +88,6 @@ export function DatasetCreateForm({
   const [mountForm, setMountForm] = useState({ ...emptyMountForm });
   const [importForm, setImportForm] = useState({ ...emptyImportForm });
   const [onlineImportError, setOnlineImportError] = useState("");
-  const [importError, setImportError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Apply external import form override when preset is selected
@@ -115,7 +115,6 @@ export function DatasetCreateForm({
   }, [dirty, onDirtyChange]);
 
   const importDatasetJson = (text: string) => {
-    setImportError("");
     try {
       const data = JSON.parse(text);
       if (data.server_path || data.source_uri) {
@@ -136,8 +135,6 @@ export function DatasetCreateForm({
         }));
       }
     } catch {
-      setImportError("无法解析 JSON");
-      setTimeout(() => setImportError(""), 3000);
     }
   };
 
@@ -212,42 +209,7 @@ export function DatasetCreateForm({
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-        <button
-          type="button"
-          className="hover:text-foreground transition-colors"
-          onClick={async () => {
-            try {
-              const text = await navigator.clipboard.readText();
-              importDatasetJson(text);
-            } catch {
-              setImportError("无法读取剪贴板");
-              setTimeout(() => setImportError(""), 3000);
-            }
-          }}
-        >
-          从剪贴板导入
-        </button>
-        <span className="text-border">|</span>
-        <label className="hover:text-foreground transition-colors cursor-pointer">
-          <input
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () =>
-                importDatasetJson(reader.result as string);
-              reader.readAsText(file);
-              e.target.value = "";
-            }}
-          />
-          从 JSON 导入
-        </label>
-        {importError && <span className="text-destructive">{importError}</span>}
-      </div>
+      <JsonImportBar onImport={importDatasetJson} className="mb-3" />
 
       <Tabs value={activeTab} onValueChange={onTabChange}>
         <TabsList className="w-full">

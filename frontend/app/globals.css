@@ -51,6 +51,10 @@
   * {
     @apply border-border;
   }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.25);
+    color: inherit;
+  }
   body {
     @apply bg-background text-foreground text-sm antialiased;
     font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
