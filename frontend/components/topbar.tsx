@@ -16,27 +16,33 @@ import {
   Server,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/auth";
+import { useUserPermissions } from "@/lib/hooks/use-user-permissions";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const nav = [
-  { href: "/", label: "概览", icon: LayoutDashboard },
-  { href: "/models", label: "模型", icon: Cpu },
-  { href: "/datasets", label: "数据集", icon: Database },
-  { href: "/criteria", label: "评估标准", icon: Ruler },
-  { href: "/tasks", label: "评测任务", icon: PlayCircle },
-  { href: "/results", label: "结果分析", icon: BarChart3 },
-  { href: "/clusters", label: "计算资源", icon: Server },
+const navWithPerms: { href: string; label: string; icon: typeof LayoutDashboard; perm: string | null }[] = [
+  { href: "/", label: "概览", icon: LayoutDashboard, perm: null },
+  { href: "/models", label: "模型", icon: Cpu, perm: "models.read" },
+  { href: "/datasets", label: "数据集", icon: Database, perm: "datasets.read" },
+  { href: "/criteria", label: "评估标准", icon: Ruler, perm: "criteria.read" },
+  { href: "/tasks", label: "评测任务", icon: PlayCircle, perm: "tasks.read" },
+  { href: "/results", label: "结果分析", icon: BarChart3, perm: "results.read" },
+  { href: "/clusters", label: "计算资源", icon: Server, perm: "clusters.read" },
 ];
-
-const adminNav = { href: "/admin", label: "用户管理", icon: Users };
 
 export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { can } = useUserPermissions();
 
-  const allNav = user?.role === "admin" ? [...nav, adminNav] : nav;
+  const allNav = navWithPerms.filter(
+    (item) => item.perm === null || can(item.perm)
+  );
+
+  if (user?.role === "admin") {
+    allNav.push({ href: "/admin", label: "用户管理", icon: Users, perm: null });
+  }
 
   const handleAccountClick = () => {
     if (user?.role === "admin") {

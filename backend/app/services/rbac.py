@@ -25,6 +25,35 @@ ALL_PERMISSIONS = [
     "admin.users", "admin.groups", "admin.acl",
 ]
 
+# Default permission sets per role (used for seeding system groups)
+ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "admin": ALL_PERMISSIONS,  # Full access
+    "data_admin": [
+        "datasets.read", "datasets.write", "datasets.download",
+        "criteria.read", "criteria.write",
+        "models.read", "models.write",
+        "tasks.read", "tasks.create",
+        "results.read",
+        "reports.read", "reports.generate", "reports.export",
+    ],
+    "engineer": [
+        "datasets.read", "datasets.download",
+        "criteria.read",
+        "models.read",
+        "tasks.read", "tasks.create", "tasks.manage",
+        "results.read",
+        "reports.read", "reports.generate", "reports.export",
+    ],
+    "viewer": [
+        "datasets.read",
+        "criteria.read",
+        "models.read",
+        "tasks.read",
+        "results.read",
+        "reports.read",
+    ],
+}
+
 
 async def get_user_permissions(session: AsyncSession, user: User) -> set[str]:
     """Get the union of all permissions from the user's groups."""

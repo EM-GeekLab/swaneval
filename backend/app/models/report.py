@@ -35,6 +35,12 @@ class Report(SQLModel, table=True):
     title: str = Field(default="")
     content_json: str = Field(default="{}")
     error_message: str = Field(default="")
+    visibility: str = Field(default="creator")
+    # 可见范围: creator (仅创建者), team (团队), public (所有用户)
+
+    allowed_users: str = Field(default="")
+    # 白名单用户ID（逗号分隔）/ Whitelist user IDs (comma-separated)
+
     created_by: uuid.UUID | None = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

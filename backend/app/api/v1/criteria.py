@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.models.criterion import Criterion
 from app.models.eval_result import EvalResult
 from app.models.llm_model import LLMModel
@@ -25,7 +25,7 @@ router = APIRouter()
 async def create_criterion(
     body: CriterionCreate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.write"),
 ):
     c = Criterion(
         name=body.name,
@@ -40,7 +40,9 @@ async def create_criterion(
 
 
 @router.get("/presets")
-async def list_preset_criteria():
+async def list_preset_criteria(
+    current_user: User = require_permission("criteria.read"),
+):
     """Return the catalog of available preset criteria (not stored in DB)."""
     from app.database import PRESET_CRITERIA
     return PRESET_CRITERIA
@@ -49,7 +51,7 @@ async def list_preset_criteria():
 @router.get("/templates")
 async def list_judge_templates(
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.read"),
 ):
     """List all judge prompt templates (builtin + user-created)."""
     from app.models.criterion import JudgeTemplate
@@ -62,7 +64,7 @@ async def list_judge_templates(
 async def create_judge_template(
     body: dict,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.write"),
 ):
     """Create or update a judge prompt template."""
     import json as _json
@@ -85,7 +87,7 @@ async def create_judge_template(
 @router.get("", response_model=list[CriterionResponse])
 async def list_criteria(
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.read"),
 ):
     stmt = select(Criterion).order_by(Criterion.created_at.desc())
     result = await session.exec(stmt)
@@ -96,7 +98,7 @@ async def list_criteria(
 async def get_criterion(
     criterion_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.read"),
 ):
     c = await session.get(Criterion, criterion_id)
     if not c:
@@ -109,7 +111,7 @@ async def update_criterion(
     criterion_id: uuid.UUID,
     body: CriterionUpdate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.write"),
 ):
     c = await session.get(Criterion, criterion_id)
     if not c:
@@ -128,7 +130,7 @@ async def update_criterion(
 async def delete_criterion(
     criterion_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.write"),
 ):
     c = await session.get(Criterion, criterion_id)
     if not c:
@@ -148,7 +150,7 @@ async def delete_criterion(
 async def test_criterion(
     body: CriterionTestRequest,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("criteria.read"),
 ):
     c = await session.get(Criterion, body.criterion_id)
     if not c:

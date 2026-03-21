@@ -22,7 +22,7 @@ from app.schemas.permission import (
     ResourceAclCreate,
     ResourceAclResponse,
 )
-from app.services.rbac import ALL_PERMISSIONS, get_user_permissions
+from app.services.rbac import ALL_PERMISSIONS, ROLE_PERMISSIONS, get_user_permissions
 
 router = APIRouter()
 
@@ -336,3 +336,44 @@ async def available_permissions(
 ):
     """List all available permissions."""
     return {"permissions": ALL_PERMISSIONS}
+
+
+# ── Seed Default Groups ──────────────────────────────────────────────
+
+
+_ROLE_GROUP_NAMES: dict[str, str] = {
+    "data_admin": "默认数据管理员组",
+    "engineer": "默认工程师组",
+    "viewer": "默认观察者组",
+}
+
+
+@router.post("/seed-defaults")
+async def seed_default_groups(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("admin.groups"),
+):
+    """Ensure default system permission groups exist with correct permissions."""
+    for role_name, perms in ROLE_PERMISSIONS.items():
+        if role_name == "admin":
+            continue  # Admin has implicit full access
+
+        group_name = _ROLE_GROUP_NAMES.get(role_name, role_name)
+
+        stmt = select(PermissionGroup).where(PermissionGroup.name == group_name)
+        existing = (await session.exec(stmt)).first()
+        if existing:
+            existing.permissions_json = json.dumps(perms)
+            session.add(existing)
+        else:
+            group = PermissionGroup(
+                name=group_name,
+                description=f"{role_name} 角色的默认权限组",
+                is_system=True,
+                permissions_json=json.dumps(perms),
+                created_by=current_user.id,
+            )
+            session.add(group)
+
+    await session.commit()
+    return {"status": "ok", "message": "Default permission groups synced"}

@@ -11,7 +11,7 @@ from sqlalchemy import func as sa_func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_permission
 from app.models.dataset import Dataset, DatasetVersion, SourceType, SyncLog
 from app.models.eval_result import EvalResult
 from app.models.user import User
@@ -130,7 +130,7 @@ async def upload_dataset(
     description: str = Form(""),
     tags: str = Form(""),
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     if not name:
@@ -191,7 +191,7 @@ async def import_dataset(
     body: DatasetImportRequest,
     job_id: str = Query("", description="Optional job ID for progress tracking"),
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     """Import dataset from HuggingFace or ModelScope."""
@@ -285,7 +285,7 @@ async def import_dataset(
 async def mount_dataset(
     body: DatasetMountRequest,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     # Mount always operates on local filesystem paths
@@ -316,14 +316,19 @@ async def mount_dataset(
 
 
 @router.get("/presets")
-async def list_preset_datasets():
+async def list_preset_datasets(
+    current_user: User = require_permission("datasets.read"),
+):
     """Return the catalog of available preset datasets (not stored in DB)."""
     from app.database import PRESET_DATASETS
     return PRESET_DATASETS
 
 
 @router.get("/import-progress/{job_id}")
-async def stream_import_progress(job_id: str):
+async def stream_import_progress(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """SSE endpoint streaming import progress for a given job."""
     from app.services.import_progress import get_event, get_job
 
@@ -366,7 +371,7 @@ async def list_datasets(
     page_size: int = 20,
     tag: str | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
 ):
     base = select(Dataset)
     if tag:
@@ -389,7 +394,7 @@ async def list_datasets(
 async def download_preset_content(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.download"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     """Download content for a preset dataset from HuggingFace."""
@@ -469,7 +474,7 @@ async def download_preset_content(
 async def get_dataset(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
 ):
     ds = await session.get(Dataset, dataset_id)
     if not ds:
@@ -482,7 +487,7 @@ async def preview_dataset(
     dataset_id: uuid.UUID,
     limit: int = 50,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     ds = await session.get(Dataset, dataset_id)
@@ -543,7 +548,7 @@ async def subscribe_dataset(
     dataset_id: uuid.UUID,
     body: DatasetSubscribeRequest,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
 ):
     """Enable auto-update subscription for a dataset."""
     ds = await session.get(Dataset, dataset_id)
@@ -565,7 +570,7 @@ async def subscribe_dataset(
 async def unsubscribe_dataset(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
 ):
     """Disable auto-update subscription for a dataset."""
     ds = await session.get(Dataset, dataset_id)
@@ -584,7 +589,7 @@ async def unsubscribe_dataset(
 async def sync_dataset_now(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
 ):
     """Manually trigger a sync check for a dataset."""
     from app.services.dataset_sync import check_and_sync_dataset
@@ -613,7 +618,7 @@ async def sync_dataset_now(
 async def delete_dataset(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     ds = await session.get(Dataset, dataset_id)
@@ -652,7 +657,7 @@ async def preflight_import(
     subset: str = Form(""),
     split: str = Form("test"),
     server_path: str = Form(""),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     """Stage 1: Preview data, detect format, identify fields, validate.
@@ -770,7 +775,7 @@ async def preflight_import(
 async def confirm_import(
     body: PreflightConfirmRequest,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.write"),
 ):
     """Stage 2: Confirm preflight and commit dataset to database."""
     cached = _preflight_cache.pop(body.preflight_token, None)
@@ -838,7 +843,7 @@ async def confirm_import(
 async def list_versions(
     dataset_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
 ):
     """List all versions of a dataset, newest first."""
     ds = await session.get(Dataset, dataset_id)
@@ -861,7 +866,7 @@ async def preview_version(
     version: int,
     limit: int = 50,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     """Preview rows from a specific dataset version."""
@@ -896,7 +901,7 @@ async def dataset_stats(
     dataset_id: uuid.UUID,
     version: int | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
     storage: StorageBackend = Depends(_get_storage),
 ):
     """Compute statistical summary for a dataset (or specific version)."""
@@ -943,7 +948,7 @@ async def list_sync_logs(
     dataset_id: uuid.UUID,
     limit: int = 20,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("datasets.read"),
 ):
     """List sync history for a dataset."""
     stmt = (

@@ -5,7 +5,7 @@ from sqlalchemy import func as sa_func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.models.criterion import Criterion
 from app.models.eval_result import EvalResult
 from app.models.eval_task import EvalSubtask, EvalTask
@@ -23,7 +23,7 @@ async def list_results(
     page: int = 1,
     page_size: int = 50,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     base = select(EvalResult)
     if task_id:
@@ -44,7 +44,7 @@ async def list_results(
 async def leaderboard(
     criterion_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Aggregate avg scores per model, per criterion (valid results only)."""
     stmt = (
@@ -90,7 +90,7 @@ async def error_results(
     page: int = 1,
     page_size: int = 50,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Return problematic results.
 
@@ -116,7 +116,7 @@ async def error_results(
 async def task_summary(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Summary stats for a task: avg score per criterion (valid results only), plus error counts."""
     # Valid results aggregation
@@ -166,7 +166,7 @@ async def task_summary(
 async def stability_stats(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Aggregated stability statistics for tasks with repeat_count > 1.
 

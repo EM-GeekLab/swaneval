@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.models.external_benchmark import ExternalBenchmark
 from app.models.user import User
 
@@ -53,7 +53,7 @@ async def list_benchmarks(
     model_name: str | None = None,
     benchmark_name: str | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """List external benchmark entries with optional filters."""
     stmt = select(ExternalBenchmark)
@@ -75,7 +75,7 @@ async def list_benchmarks(
 async def create_benchmark(
     body: BenchmarkCreate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Add a single external benchmark entry."""
     entry = ExternalBenchmark(
@@ -100,7 +100,7 @@ async def create_benchmark(
 async def create_benchmarks_batch(
     body: BenchmarkBatchCreate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Batch import multiple external benchmark entries."""
     entries = []
@@ -130,7 +130,7 @@ async def pull_benchmarks_from_platform(
     limit: int = 50,
     auto_import: bool = False,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     """Pull benchmark data from an external platform.
 
@@ -174,7 +174,7 @@ async def pull_benchmarks_from_platform(
 async def delete_benchmark(
     benchmark_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("results.read"),
 ):
     entry = await session.get(ExternalBenchmark, benchmark_id)
     if not entry:

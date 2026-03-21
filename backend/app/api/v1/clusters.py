@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.database import get_session
 from app.models.compute_cluster import ClusterStatus, ComputeCluster
 from app.models.user import User
@@ -81,8 +81,7 @@ async def create_cluster(
     body: ClusterCreate,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.manage") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.manage"),
 ):
     """Register a new compute cluster from a kubeconfig."""
     # Validate kubeconfig and test connectivity
@@ -115,8 +114,7 @@ async def create_cluster(
 @router.get("", response_model=list[ClusterResponse])
 async def list_clusters(
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.read") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.read"),
 ):
     """List all registered compute clusters."""
     stmt = select(ComputeCluster).order_by(col(ComputeCluster.created_at).desc())
@@ -128,8 +126,7 @@ async def list_clusters(
 async def get_cluster(
     cluster_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.read") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.read"),
 ):
     """Get details for a single compute cluster."""
     cluster = await session.get(ComputeCluster, cluster_id)
@@ -143,8 +140,7 @@ async def update_cluster(
     cluster_id: uuid.UUID,
     body: ClusterUpdate,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.manage") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.manage"),
 ):
     """Update cluster name, description, or namespace."""
     cluster = await session.get(ComputeCluster, cluster_id)
@@ -169,8 +165,7 @@ async def update_cluster(
 async def delete_cluster(
     cluster_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.manage") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.manage"),
 ):
     """Delete a compute cluster."""
     cluster = await session.get(ComputeCluster, cluster_id)
@@ -185,8 +180,7 @@ async def probe_cluster(
     cluster_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.manage") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.manage"),
 ):
     """Force a resource probe on the cluster."""
     cluster = await session.get(ComputeCluster, cluster_id)
@@ -214,8 +208,7 @@ async def probe_cluster(
 async def list_cluster_nodes(
     cluster_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    # TODO: upgrade to require_permission("clusters.read") when available
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("clusters.read"),
 ):
     """List nodes in the cluster with resource details."""
     cluster = await session.get(ComputeCluster, cluster_id)

@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.config import settings
 from app.models.llm_model import LLMModel
 from app.models.user import User
@@ -29,7 +29,7 @@ router = APIRouter()
 async def create_model(
     body: LLMModelCreate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.write"),
 ):
     m = LLMModel(
         name=body.name,
@@ -51,7 +51,7 @@ async def create_model(
 @router.get("", response_model=list[LLMModelResponse])
 async def list_models(
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.read"),
 ):
     stmt = select(LLMModel).order_by(col(LLMModel.created_at).desc())
     result = await session.exec(stmt)
@@ -62,7 +62,7 @@ async def list_models(
 async def get_model(
     model_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.read"),
 ):
     m = await session.get(LLMModel, model_id)
     if not m:
@@ -75,7 +75,7 @@ async def update_model(
     model_id: uuid.UUID,
     body: LLMModelUpdate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.write"),
 ):
     m = await session.get(LLMModel, model_id)
     if not m:
@@ -106,7 +106,7 @@ async def update_model(
 async def test_model(
     model_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.read"),
 ):
     m = await session.get(LLMModel, model_id)
     if not m:
@@ -134,7 +134,7 @@ async def test_model(
 async def delete_model(
     model_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.write"),
 ):
     m = await session.get(LLMModel, model_id)
     if not m:
@@ -155,7 +155,7 @@ async def playground(
     model_id: uuid.UUID,
     body: PlaygroundRequest,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("models.read"),
 ):
     """Send a prompt to a model and get the response."""
     m = await session.get(LLMModel, model_id)

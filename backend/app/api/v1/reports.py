@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.models.report import Report, ReportStatus, ReportType
 from app.models.user import User
 from app.services.report_generator import (
@@ -39,7 +39,7 @@ async def create_report(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.generate"),
 ):
     """Generate and persist a report."""
     generator = REPORT_GENERATORS.get(report_type)
@@ -89,16 +89,33 @@ async def create_report(
 async def list_reports(
     task_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.read"),
 ):
-    """List persisted reports."""
+    """List persisted reports, filtered by visibility."""
     from sqlmodel import select as sel
 
     stmt = sel(Report).order_by(Report.created_at.desc())
     if task_id:
         stmt = stmt.where(Report.task_id == task_id)
     result = await session.exec(stmt)
-    reports = result.all()
+    all_reports = result.all()
+
+    # Filter by visibility
+    visible = []
+    for r in all_reports:
+        if current_user.role == "admin":
+            visible.append(r)
+        elif r.created_by == current_user.id:
+            visible.append(r)
+        elif r.visibility == "public":
+            visible.append(r)
+        elif r.visibility == "team":
+            visible.append(r)  # team = all authenticated users
+        elif r.allowed_users:
+            if str(current_user.id) in r.allowed_users.split(","):
+                visible.append(r)
+    reports = visible
+
     return [
         {
             "id": str(r.id),
@@ -106,6 +123,7 @@ async def list_reports(
             "report_type": r.report_type,
             "status": r.status,
             "title": r.title,
+            "visibility": r.visibility,
             "created_at": r.created_at.isoformat(),
         }
         for r in reports
@@ -116,18 +134,29 @@ async def list_reports(
 async def get_report(
     report_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.read"),
 ):
     """Fetch a persisted report with full content."""
     report = await session.get(Report, report_id)
     if not report:
         raise HTTPException(404, "Report not found")
+
+    # Visibility access check
+    if (
+        current_user.role != "admin"
+        and report.created_by != current_user.id
+        and report.visibility == "creator"
+        and str(current_user.id) not in (report.allowed_users or "").split(",")
+    ):
+        raise HTTPException(403, "无权查看此报告")
+
     return {
         "id": str(report.id),
         "task_id": str(report.task_id),
         "report_type": report.report_type,
         "status": report.status,
         "title": report.title,
+        "visibility": report.visibility,
         "content": json.loads(report.content_json) if report.content_json else None,
         "error_message": report.error_message,
         "created_at": report.created_at.isoformat(),
@@ -142,7 +171,7 @@ async def generate_report(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.read"),
 ):
     """Generate a report as JSON (stateless, not persisted)."""
     generator = REPORT_GENERATORS.get(report_type)
@@ -170,7 +199,7 @@ async def export_csv(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.export"),
 ):
     """Export report as CSV."""
     report = await _get_report(
@@ -195,7 +224,7 @@ async def export_html(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.export"),
 ):
     """Export report as HTML."""
     report = await _get_report(
@@ -220,7 +249,7 @@ async def export_docx(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.export"),
 ):
     """Export report as DOCX."""
     report = await _get_report(
@@ -248,7 +277,7 @@ async def export_pdf(
     task_id: uuid.UUID,
     report_type: str = "performance",
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("reports.export"),
 ):
     """Export report as PDF (via HTML rendering)."""
     report = await _get_report(task_id, report_type, session)

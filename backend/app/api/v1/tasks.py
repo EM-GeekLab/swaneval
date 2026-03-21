@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_permission
 from app.models.eval_result import EvalResult
 from app.models.eval_task import EvalSubtask, EvalTask, TaskStatus
 from app.models.llm_model import LLMModel
@@ -52,7 +52,7 @@ router = APIRouter()
 async def create_task(
     body: TaskCreate,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.create"),
 ):
     task = EvalTask(
         name=body.name,
@@ -84,7 +84,7 @@ async def create_task(
 async def list_tasks(
     status_filter: TaskStatus | None = None,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.read"),
 ):
     stmt = select(EvalTask).order_by(EvalTask.created_at.desc())
     if status_filter:
@@ -96,7 +96,7 @@ async def list_tasks(
 
 @router.get("/queue-status")
 async def queue_status(
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.read"),
 ):
     """Return task queue metrics."""
     from app.services.task_queue import get_queue_status
@@ -108,7 +108,7 @@ async def queue_status(
 async def get_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.read"),
 ):
     task = await session.get(EvalTask, task_id)
     if not task:
@@ -120,7 +120,7 @@ async def get_task(
 async def list_subtasks(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.read"),
 ):
     stmt = (
         select(EvalSubtask)
@@ -135,7 +135,7 @@ async def list_subtasks(
 async def pause_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.manage"),
 ):
     task = await session.get(EvalTask, task_id)
     if not task:
@@ -153,7 +153,7 @@ async def pause_task(
 async def resume_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.manage"),
 ):
     task = await session.get(EvalTask, task_id)
     if not task:
@@ -173,7 +173,7 @@ async def resume_task(
 async def cancel_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.manage"),
 ):
     task = await session.get(EvalTask, task_id)
     if not task:
@@ -198,7 +198,7 @@ async def cancel_task(
 async def restart_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.manage"),
 ):
     """Restart a failed/cancelled task from scratch — clears all results."""
     task = await session.get(EvalTask, task_id)
@@ -233,7 +233,7 @@ async def restart_task(
 async def delete_task(
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = require_permission("tasks.manage"),
 ):
     task = await session.get(EvalTask, task_id)
     if not task:
