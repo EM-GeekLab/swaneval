@@ -89,3 +89,38 @@ async def dashboard_metrics(
             "avg_tokens": round(float(lat_row[4] or 0), 1),
         },
     }
+
+
+@router.get("/gpu")
+async def gpu_metrics(
+    current_user: User = Depends(get_current_user),
+):
+    """Current GPU metrics from DCGM exporter scraping."""
+    from app.services.dcgm_collector import (
+        gpu_memory_total_bytes,
+        gpu_memory_used_bytes,
+        gpu_power_usage_watts,
+        gpu_sm_clock_mhz,
+        gpu_temperature,
+        gpu_utilization,
+    )
+
+    def _collect_gauge(gauge) -> list[dict]:
+        """Extract current values from a Prometheus Gauge."""
+        results = []
+        # Access internal metrics store
+        for sample in gauge.collect()[0].samples:
+            results.append({
+                "labels": dict(sample.labels),
+                "value": sample.value,
+            })
+        return results
+
+    return {
+        "temperature": _collect_gauge(gpu_temperature),
+        "utilization": _collect_gauge(gpu_utilization),
+        "memory_used": _collect_gauge(gpu_memory_used_bytes),
+        "memory_total": _collect_gauge(gpu_memory_total_bytes),
+        "power_usage": _collect_gauge(gpu_power_usage_watts),
+        "sm_clock": _collect_gauge(gpu_sm_clock_mhz),
+    }

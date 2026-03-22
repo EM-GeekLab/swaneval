@@ -26,6 +26,7 @@ import {
 import { useModels } from "@/lib/hooks/use-models";
 import { useDatasets, useDatasetPreview } from "@/lib/hooks/use-datasets";
 import { useCriteria } from "@/lib/hooks/use-criteria";
+import { useClusters } from "@/lib/hooks/use-clusters";
 import { useCreateTask } from "@/lib/hooks/use-tasks";
 
 const STEPS = [
@@ -49,6 +50,11 @@ const emptyForm = {
   gpu_ids: "",
   env_vars: "",
   execution_backend: "external_api",
+  cluster_id: "",
+  resource_gpu_count: "1",
+  resource_gpu_type: "",
+  resource_memory_gb: "40",
+  resource_hf_model_id: "",
   field_mappings: {} as Record<string, { prompt_field: string; expected_field: string }>,
 };
 
@@ -73,6 +79,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
   const { data: datasetsData } = useDatasets();
   const datasets = useMemo(() => datasetsData?.items ?? [], [datasetsData]);
   const { data: criteria = [] } = useCriteria();
+  const { data: clusters = [] } = useClusters();
   const createTask = useCreateTask();
 
   const [step, setStep] = useState(0);
@@ -106,7 +113,10 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       );
     }
     if (step === 2) return !!form.name;
-    if (step === 3) return true;
+    if (step === 3) {
+      if (form.execution_backend === "k8s_vllm" && !form.cluster_id) return false;
+      return true;
+    }
     return true;
   };
 
@@ -119,6 +129,19 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
     if (Object.keys(form.field_mappings).length > 0) {
       paramsObj.field_mappings = form.field_mappings;
     }
+
+    // Build resource_config for k8s_vllm
+    let resource_config = "";
+    if (form.execution_backend === "k8s_vllm") {
+      const rc: Record<string, unknown> = {
+        gpu_count: parseInt(form.resource_gpu_count) || 1,
+        memory_gb: parseInt(form.resource_memory_gb) || 40,
+      };
+      if (form.resource_gpu_type) rc.gpu_type = form.resource_gpu_type;
+      if (form.resource_hf_model_id) rc.hf_model_id = form.resource_hf_model_id;
+      resource_config = JSON.stringify(rc);
+    }
+
     await createTask.mutateAsync({
       name: form.name,
       model_id: form.model_id,
@@ -130,6 +153,8 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       gpu_ids: form.gpu_ids || undefined,
       env_vars: form.env_vars || undefined,
       execution_backend: form.execution_backend,
+      cluster_id: form.cluster_id || undefined,
+      resource_config: resource_config || undefined,
     });
     onSuccess();
   };
@@ -440,6 +465,78 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                 选择任务执行方式：外部 API 直接调用模型接口，本地 Worker 在 GPU 服务器运行，K8s/vLLM 在集群部署
               </p>
             </PanelField>
+            {/* K8s/vLLM-specific: cluster + resource config */}
+            {form.execution_backend === "k8s_vllm" && (
+              <>
+                <PanelField label="计算集群" required>
+                  <Select
+                    value={form.cluster_id}
+                    onValueChange={(v) => setForm({ ...form, cluster_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择集群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clusters.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                          暂无集群，<a href="/admin/clusters" className="text-primary hover:underline">去添加</a>
+                        </div>
+                      ) : clusters.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span>{c.name}</span>
+                          {c.gpu_count > 0 && (
+                            <span className="ml-2 text-muted-foreground">
+                              {c.gpu_count}× {c.gpu_type || "GPU"}
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </PanelField>
+                <div className="grid grid-cols-2 gap-2">
+                  <PanelField label="GPU 数量">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.resource_gpu_count}
+                      onChange={(e) => setForm({ ...form, resource_gpu_count: e.target.value })}
+                    />
+                  </PanelField>
+                  <PanelField label="内存 (GB)">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.resource_memory_gb}
+                      onChange={(e) => setForm({ ...form, resource_memory_gb: e.target.value })}
+                    />
+                  </PanelField>
+                </div>
+                <PanelField label="GPU 型号 (可选)">
+                  <Input
+                    value={form.resource_gpu_type}
+                    onChange={(e) => setForm({ ...form, resource_gpu_type: e.target.value })}
+                    placeholder="例：NVIDIA-A100-SXM4-80GB"
+                    className="font-mono"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    K8s 节点选择器，匹配 nvidia.com/gpu.product 标签
+                  </p>
+                </PanelField>
+                <PanelField label="HF Model ID (可选)">
+                  <Input
+                    value={form.resource_hf_model_id}
+                    onChange={(e) => setForm({ ...form, resource_hf_model_id: e.target.value })}
+                    placeholder="例：Qwen/Qwen2.5-7B-Instruct"
+                    className="font-mono"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    vLLM 部署时使用的 HuggingFace 模型 ID，留空则使用模型的 model_name
+                  </p>
+                </PanelField>
+              </>
+            )}
+
             <PanelField label="GPU 编号">
               <Input
                 value={form.gpu_ids}
@@ -560,6 +657,18 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                 form.execution_backend === "external_api" ? "外部 API" :
                 form.execution_backend === "local_worker" ? "本地 Worker" : "K8s / vLLM"
               } />
+              {form.execution_backend === "k8s_vllm" && form.cluster_id && (
+                <DetailRow
+                  label="集群"
+                  value={clusters.find((c) => c.id === form.cluster_id)?.name ?? form.cluster_id}
+                />
+              )}
+              {form.execution_backend === "k8s_vllm" && (
+                <DetailRow
+                  label="资源配置"
+                  value={`${form.resource_gpu_count} GPU × ${form.resource_memory_gb}GB`}
+                />
+              )}
             </div>
 
             {/* Config JSON preview toggle */}

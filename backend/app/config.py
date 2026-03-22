@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     SANDBOX_MAX_OUTPUT_BYTES: int = 1_048_576
     SANDBOX_ALLOWED: bool = True
 
+    # ── DCGM Exporter ──
+    DCGM_EXPORTER_URLS: str = ""
+    # Comma-separated DCGM exporter endpoints, e.g. "http://gpu1:9400/metrics,http://gpu2:9400/metrics"
+    DCGM_SCRAPE_INTERVAL_SECONDS: int = 30
+    # How often to scrape DCGM exporters (in seconds)
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

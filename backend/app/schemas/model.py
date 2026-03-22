@@ -64,3 +64,39 @@ class PlaygroundResponse(BaseModel):
     latency_ms: float
     tokens_generated: int
     model_name: str
+
+
+class ModelPullRequest(BaseModel):
+    model_id: str  # e.g. "Qwen/Qwen2.5-7B-Instruct"
+    source: str = "huggingface"  # "huggingface" or "modelscope"
+    name: str = ""  # Override display name
+    endpoint_url: str = ""  # Pre-configure endpoint
+    api_key: str = ""  # Pre-configure API key
+    token: str = ""  # HF/MS access token override
+
+
+class ModelPullResponse(BaseModel):
+    model: LLMModelResponse
+    source: str
+    source_model_id: str
+    metadata: dict
+
+
+class ModelSearchResponse(BaseModel):
+    model_id: str
+    downloads: int = 0
+    likes: int = 0
+    pipeline_tag: str = ""
+
+
+class ModelRunLogResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    model_id: uuid.UUID
+    action: str
+    status: str
+    message: str
+    duration_ms: int
+    triggered_by: uuid.UUID | None
+    created_at: datetime

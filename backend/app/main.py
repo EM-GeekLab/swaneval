@@ -16,6 +16,7 @@ from app.metrics import (
     http_requests_total,
 )
 from app.services.dataset_sync import start_sync_loop, stop_sync_loop
+from app.services.dcgm_collector import start_dcgm_loop, stop_dcgm_loop
 from app.services.storage import get_storage
 
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +53,9 @@ async def lifespan(app: FastAPI):
             os.environ.setdefault("AWS_DEFAULT_REGION", settings.S3_REGION)
 
     start_sync_loop()
+    start_dcgm_loop()
     yield
+    stop_dcgm_loop()
     stop_sync_loop()
 
 
