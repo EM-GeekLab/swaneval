@@ -556,21 +556,20 @@ async def run_task(task_id: uuid.UUID):
                     session.add(model)
                     await session.commit()
 
-                    hf_token = (
-                        model.api_key
-                        if model.model_type in ("huggingface", "modelscope")
-                        else ""
-                    )
+                    # HF token priority: model api_key > task creator's token > global setting
+                    hf_token = ""
+                    if model.model_type in ("huggingface", "modelscope") and model.api_key:
+                        hf_token = model.api_key
+                    if not hf_token and hasattr(task, "created_by") and task.created_by:
+                        from app.models.user import User
+                        creator = await session.get(User, task.created_by)
+                        if creator and creator.hf_token:
+                            hf_token = creator.hf_token
+                    if not hf_token:
+                        hf_token = settings.HF_TOKEN or ""
 
                     try:
                         vllm_image = getattr(cluster, "vllm_image", "") or ""
-                        hf_token = settings.HF_TOKEN or ""
-                        # Try user-level token if task has created_by
-                        if not hf_token and hasattr(task, "created_by") and task.created_by:
-                            from app.models.user import User
-                            creator = await session.get(User, task.created_by)
-                            if creator and creator.hf_token:
-                                hf_token = creator.hf_token
                         vllm_endpoint, _vllm_deployment = await full_vllm_lifecycle(
                             kubeconfig_encrypted=cluster.kubeconfig_encrypted,
                             namespace=cluster.namespace,
@@ -581,6 +580,7 @@ async def run_task(task_id: uuid.UUID):
                             memory_gb=memory_gb,
                             hf_token=hf_token,
                             image=vllm_image,
+                            service_type=res_cfg.get("service_type", "NodePort"),
                         )
                         _vllm_kubeconfig = cluster.kubeconfig_encrypted
                         _vllm_namespace = cluster.namespace

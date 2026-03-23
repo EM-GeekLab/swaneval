@@ -6,7 +6,6 @@ making it safe for concurrent use with different kubeconfigs.
 
 import base64
 import os
-import tempfile
 
 import yaml
 
@@ -27,14 +26,8 @@ def create_api_client(kubeconfig_encrypted: str):
     # Inline certificate data to avoid temp file path references
     _inline_cert_data(kubeconfig_dict)
 
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
-    try:
-        yaml.dump(kubeconfig_dict, tmp)
-        tmp.close()
-        # new_client_from_config returns an ApiClient WITHOUT touching global state
-        return config.new_client_from_config(config_file=tmp.name)
-    finally:
-        os.unlink(tmp.name)
+    # Dict-based config avoids temp files entirely
+    return config.new_client_from_config_dict(kubeconfig_dict)
 
 
 def create_core_v1(kubeconfig_encrypted: str):

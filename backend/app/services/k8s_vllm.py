@@ -14,6 +14,7 @@ Lifecycle:
 
 import asyncio
 import logging
+import time as _time
 import uuid
 
 from app.services.k8s_client import create_both
@@ -25,15 +26,8 @@ VLLM_IMAGE = "vllm/vllm-openai:latest"
 
 
 def _get_k8s_clients(kubeconfig_encrypted: str):
-    """Create K8s API clients (CoreV1 + AppsV1) from encrypted kubeconfig."""
-    from kubernetes import client
-    from kubernetes.config import new_client_from_config_dict
-
-    kubeconfig_yaml = decrypt(kubeconfig_encrypted)
-    kubeconfig_dict = yaml.safe_load(kubeconfig_yaml)
-
-    api_client = new_client_from_config_dict(kubeconfig_dict)
-    return client.CoreV1Api(api_client=api_client), client.AppsV1Api(api_client=api_client)
+    """Create thread-safe K8s API clients (CoreV1 + AppsV1)."""
+    return create_both(kubeconfig_encrypted)
 
 
 async def prepare_namespace(
@@ -386,6 +380,24 @@ async def wait_vllm_ready(
                 base_url = await _resolve_node_port_endpoint(
                     core_v1, namespace, deployment_name,
                 )
+            elif service_type == "LoadBalancer":
+                # Read service to get load balancer ingress
+                def _get_lb():
+                    svc = core_v1.read_namespaced_service(deployment_name, namespace)
+                    lb = svc.status.load_balancer
+                    ingress = (lb.ingress or []) if lb else []
+                    if ingress:
+                        host = ingress[0].ip or ingress[0].hostname
+                        return f"http://{host}:8000"
+                    return None
+                lb_url = await asyncio.to_thread(_get_lb)
+                if lb_url:
+                    endpoint = f"{lb_url}/v1/chat/completions"
+                    logger.info("vLLM %s is ready at %s", deployment_name, endpoint)
+                    return endpoint
+                # LB not ready yet, keep polling
+                await asyncio.sleep(poll_interval)
+                continue
             else:
                 base_url = (
                     f"http://{deployment_name}.{namespace}"

@@ -11,14 +11,7 @@ logger = logging.getLogger(__name__)
 
 def _get_k8s_client(kubeconfig_encrypted: str):
     """Create a K8s API client from encrypted kubeconfig."""
-    from kubernetes import client
-    from kubernetes.config import new_client_from_config_dict
-
-    kubeconfig_yaml = decrypt(kubeconfig_encrypted)
-    kubeconfig_dict = yaml.safe_load(kubeconfig_yaml)
-
-    api_client = new_client_from_config_dict(kubeconfig_dict)
-    return client.CoreV1Api(api_client=api_client)
+    return create_core_v1(kubeconfig_encrypted)
 
 
 def validate_kubeconfig(kubeconfig_yaml: str) -> dict:
