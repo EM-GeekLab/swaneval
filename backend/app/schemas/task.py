@@ -22,6 +22,8 @@ class TaskCreate(BaseModel):
 
 
 class TaskResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: uuid.UUID
     name: str
     status: TaskStatus
