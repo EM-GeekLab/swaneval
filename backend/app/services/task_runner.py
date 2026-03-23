@@ -556,6 +556,12 @@ async def run_task(task_id: uuid.UUID):
                     session.add(model)
                     await session.commit()
 
+                    hf_token = (
+                        model.api_key
+                        if model.model_type in ("huggingface", "modelscope")
+                        else ""
+                    )
+
                     try:
                         vllm_image = getattr(cluster, "vllm_image", "") or ""
                         vllm_endpoint, _vllm_deployment = await full_vllm_lifecycle(
@@ -566,6 +572,7 @@ async def run_task(task_id: uuid.UUID):
                             gpu_count=gpu_count,
                             gpu_type=gpu_type,
                             memory_gb=memory_gb,
+                            hf_token=hf_token,
                             image=vllm_image,
                         )
                         _vllm_kubeconfig = cluster.kubeconfig_encrypted
@@ -581,7 +588,7 @@ async def run_task(task_id: uuid.UUID):
                     # Override model endpoint with the deployed vLLM endpoint
                     model.endpoint_url = vllm_endpoint
                     model.deploy_status = "running"
-                    model.api_key = "dummy"  # vLLM doesn't need auth
+                    model.vllm_deployment_name = _vllm_deployment
                     session.add(model)
                     await session.commit()
 

@@ -6,29 +6,14 @@ import tempfile
 
 import yaml
 
-from app.services.encryption import decrypt
+from app.services.k8s_client import create_core_v1
 
 logger = logging.getLogger(__name__)
 
 
 def _get_k8s_client(kubeconfig_encrypted: str):
-    """Create a K8s API client from encrypted kubeconfig."""
-    from kubernetes import client, config
-
-    kubeconfig_yaml = decrypt(kubeconfig_encrypted)
-    kubeconfig_dict = yaml.safe_load(kubeconfig_yaml)
-
-    # Write to temp file (K8s client needs a file path)
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False,
-    )
-    try:
-        yaml.dump(kubeconfig_dict, tmp)
-        tmp.close()
-        config.load_kube_config(config_file=tmp.name)
-        return client.CoreV1Api()
-    finally:
-        os.unlink(tmp.name)
+    """Create a thread-safe K8s CoreV1Api client."""
+    return create_core_v1(kubeconfig_encrypted)
 
 
 def validate_kubeconfig(kubeconfig_yaml: str) -> dict:
@@ -39,21 +24,17 @@ def validate_kubeconfig(kubeconfig_yaml: str) -> dict:
     if not kubeconfig_dict or "clusters" not in kubeconfig_dict:
         raise ValueError("Invalid kubeconfig: missing clusters")
 
-    # Extract API server URL
     clusters = kubeconfig_dict.get("clusters", [])
     api_server = ""
     if clusters:
         api_server = clusters[0].get("cluster", {}).get("server", "")
 
-    # Test connectivity
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False,
-    )
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
     try:
         yaml.dump(kubeconfig_dict, tmp)
         tmp.close()
-        config.load_kube_config(config_file=tmp.name)
-        v1 = client.CoreV1Api()
+        api_client = config.new_client_from_config(config_file=tmp.name)
+        v1 = client.CoreV1Api(api_client=api_client)
         v1.list_namespace(limit=1, _request_timeout=10)
     except Exception as e:
         raise ValueError(f"Failed to connect to cluster: {e}") from e

@@ -14,37 +14,19 @@ Lifecycle:
 
 import asyncio
 import logging
-import os
-import tempfile
 import uuid
 
-import yaml
-
-from app.services.encryption import decrypt
+from app.services.k8s_client import create_both
 
 logger = logging.getLogger(__name__)
 
-# Default vLLM image — matches official Helm chart
+# Default vLLM image -- matches official Helm chart
 VLLM_IMAGE = "vllm/vllm-openai:latest"
 
 
 def _get_k8s_clients(kubeconfig_encrypted: str):
-    """Create K8s API clients (CoreV1 + AppsV1) from encrypted kubeconfig."""
-    from kubernetes import client, config
-
-    kubeconfig_yaml = decrypt(kubeconfig_encrypted)
-    kubeconfig_dict = yaml.safe_load(kubeconfig_yaml)
-
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False,
-    )
-    try:
-        yaml.dump(kubeconfig_dict, tmp)
-        tmp.close()
-        config.load_kube_config(config_file=tmp.name)
-        return client.CoreV1Api(), client.AppsV1Api()
-    finally:
-        os.unlink(tmp.name)
+    """Create thread-safe K8s API clients (CoreV1 + AppsV1)."""
+    return create_both(kubeconfig_encrypted)
 
 
 async def prepare_namespace(
@@ -105,7 +87,7 @@ async def deploy_vllm(
     )
     dep_name = deployment_name or f"vllm-{uuid.uuid4().hex[:8]}"
 
-    # ── Build container args (matches vLLM Helm chart) ──
+    # -- Build container args (matches vLLM Helm chart) --
     args = [
         "--model", hf_model_id,
         "--port", "8000",
@@ -117,7 +99,7 @@ async def deploy_vllm(
     if extra_args:
         args += extra_args
 
-    # ── Environment variables ──
+    # -- Environment variables --
     env = [
         k8s_client.V1EnvVar(name="VLLM_LOGGING_LEVEL", value="INFO"),
     ]
@@ -126,7 +108,7 @@ async def deploy_vllm(
             name="HUGGING_FACE_HUB_TOKEN", value=hf_token,
         ))
 
-    # ── Resource requirements ──
+    # -- Resource requirements --
     use_gpu = gpu_count > 0
     resources = k8s_client.V1ResourceRequirements(
         limits={
@@ -141,7 +123,7 @@ async def deploy_vllm(
         },
     )
 
-    # ── Volume mounts — /dev/shm for tensor parallelism shared memory ──
+    # -- Volume mounts -- /dev/shm for tensor parallelism shared memory --
     volume_mounts = [
         k8s_client.V1VolumeMount(
             name="dshm", mount_path="/dev/shm",
@@ -157,7 +139,7 @@ async def deploy_vllm(
         ),
     ]
 
-    # ── Health probes (matches official Helm chart) ──
+    # -- Health probes (matches official Helm chart) --
     readiness_probe = k8s_client.V1Probe(
         http_get=k8s_client.V1HTTPGetAction(path="/health", port=8000),
         initial_delay_seconds=5,
@@ -184,7 +166,7 @@ async def deploy_vllm(
         liveness_probe=liveness_probe,
     )
 
-    # ── Node affinity for GPU type (matches Helm chart gpu_models) ──
+    # -- Node affinity for GPU type (matches Helm chart gpu_models) --
     affinity = None
     if gpu_type and use_gpu:
         affinity = k8s_client.V1Affinity(
@@ -242,7 +224,7 @@ async def deploy_vllm(
         dep_name, namespace, effective_image, hf_model_id, gpu_count, memory_gb, dtype,
     )
 
-    # ── ClusterIP Service ──
+    # -- ClusterIP Service --
     service = k8s_client.V1Service(
         metadata=k8s_client.V1ObjectMeta(
             name=dep_name, namespace=namespace, labels=labels,
