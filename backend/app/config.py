@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     VLLM_READINESS_TIMEOUT: int = 600
     # vLLM 部署就绪超时(秒) / vLLM deployment readiness timeout in seconds
 
+    # ── Worker mode ──
+    EMBEDDED_WORKER: bool = True
+    # 是否在 API 进程内启动内嵌 worker / Run worker inside API process
+    # True = 零配置开发模式，任务在 API 进程内执行（默认）
+    # False = 生产模式，需单独运行 `python -m app.worker`
+
     SANDBOX_TIMEOUT_SECONDS: int = 10
     SANDBOX_MAX_OUTPUT_BYTES: int = 1_048_576
     SANDBOX_ALLOWED: bool = True

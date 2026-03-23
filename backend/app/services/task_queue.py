@@ -107,3 +107,49 @@ async def unregister_worker(worker_id: str) -> None:
     """Remove worker from the registry."""
     r = _get_redis()
     await r.hdel(WORKER_KEY, worker_id)
+
+
+async def embedded_worker_loop() -> None:
+    """In-process worker loop for development / single-server deployments.
+
+    Runs as an asyncio task inside the API process. Dequeues tasks from
+    Redis and executes them without needing a separate worker process.
+    """
+    import uuid as _uuid
+
+    from app.services.task_runner import run_task
+
+    worker_id = f"embedded-{_uuid.uuid4().hex[:8]}"
+    await register_worker(worker_id)
+    logger.info("Embedded worker %s started", worker_id)
+
+    try:
+        while True:
+            await update_worker_status(worker_id, "idle")
+            try:
+                job = await dequeue_task(timeout=3)
+            except Exception:
+                # Redis connection error — wait and retry
+                import asyncio
+                await asyncio.sleep(5)
+                continue
+
+            if job is None:
+                continue
+
+            task_id = job["task_id"]
+            logger.info("Embedded worker picked up task %s", task_id)
+            await update_worker_status(worker_id, "busy")
+            await mark_running(task_id, worker_id)
+
+            try:
+                await run_task(_uuid.UUID(task_id))
+            except Exception:
+                logger.exception("Embedded worker: task %s failed", task_id)
+            finally:
+                await mark_done(task_id)
+    except Exception:
+        pass  # CancelledError on shutdown
+    finally:
+        await unregister_worker(worker_id)
+        logger.info("Embedded worker %s stopped", worker_id)

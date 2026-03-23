@@ -71,6 +71,33 @@ services:
       - backend
     restart: unless-stopped
 
+  # ── 独立 Worker（可选，用于生产环境水平扩展）──
+  # 启用后需设置 backend 环境变量 EMBEDDED_WORKER=false
+  # 用法：docker compose --profile worker up -d
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: swaneval-worker
+    command: ["uv", "run", "python", "-m", "app.worker"]
+    volumes:
+      - swaneval_data:/data
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://swaneval:swaneval@postgres:5432/swaneval"
+      DATABASE_URL_SYNC: "postgresql://swaneval:swaneval@postgres:5432/swaneval"
+      REDIS_URL: "redis://redis:6379/0"
+      STORAGE_BACKEND: local
+      STORAGE_ROOT: /data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - worker
+
   # ── 可选服务（需要 --profile 启用）──
 
   ollama:

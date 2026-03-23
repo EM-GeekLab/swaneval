@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -52,7 +53,18 @@ async def lifespan(app: FastAPI):
             os.environ.setdefault("AWS_DEFAULT_REGION", settings.S3_REGION)
 
     start_sync_loop()
+
+    # Start embedded worker if configured (default for dev)
+    _embedded_worker_task = None
+    if settings.EMBEDDED_WORKER:
+        from app.services.task_queue import embedded_worker_loop
+        _embedded_worker_task = asyncio.create_task(embedded_worker_loop())
+        logger.info("Embedded worker started (set EMBEDDED_WORKER=false for standalone mode)")
+
     yield
+
+    if _embedded_worker_task and not _embedded_worker_task.done():
+        _embedded_worker_task.cancel()
     stop_sync_loop()
 
 
