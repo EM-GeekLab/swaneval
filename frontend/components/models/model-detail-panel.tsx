@@ -25,7 +25,8 @@ import {
   ChevronDown,
   Send,
 } from "lucide-react";
-import { useUpdateModel, useTestModel, usePlayground } from "@/lib/hooks/use-models";
+import { useUpdateModel, useTestModel, usePlayground, useDeployModel, useUndeployModel } from "@/lib/hooks/use-models";
+import { useClusters } from "@/lib/hooks/use-clusters";
 import type { LLMModel } from "@/lib/types";
 import { cn, utc } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
@@ -56,6 +57,10 @@ export function ModelDetailPanel({
   const update = useUpdateModel();
   const testModel = useTestModel();
   const playground = usePlayground();
+  const deploy = useDeployModel();
+  const undeploy = useUndeployModel();
+  const { data: clusters = [] } = useClusters();
+  const [deployClusterId, setDeployClusterId] = useState("");
 
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
@@ -273,6 +278,67 @@ export function ModelDetailPanel({
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
+
+          {/* Deploy section - only for HF/MS/local models */}
+          {(model.model_type === "huggingface" || model.model_type === "modelscope" || model.model_type === "local") && (
+            <div className="border-t pt-3 mt-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">集群部署</p>
+              {model.deploy_status === "running" ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-emerald-600 font-medium">已部署</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => undeploy.mutate(model.id)}
+                    disabled={undeploy.isPending}
+                  >
+                    {undeploy.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    停止部署
+                  </Button>
+                </div>
+              ) : model.deploy_status === "deploying" ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  正在部署...
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {model.deploy_status === "failed" && (
+                    <p className="text-xs text-destructive">上次部署失败</p>
+                  )}
+                  <Select value={deployClusterId} onValueChange={setDeployClusterId}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="选择集群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clusters.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.gpu_count} GPU)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={!deployClusterId || deploy.isPending}
+                    onClick={() => deploy.mutate({
+                      model_id: model.id,
+                      cluster_id: deployClusterId,
+                      gpu_count: 1,
+                    })}
+                  >
+                    {deploy.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    部署到集群
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Playground */}
           <div className="border-t pt-3 mt-3">

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -22,6 +23,8 @@ from app.schemas.model import (
 from app.services.model_connectivity import test_model_connectivity
 from app.services.task_runner import ModelCallResult, _call_model
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -41,6 +44,7 @@ async def create_model(
         description=body.description,
         model_name=body.model_name,
         max_tokens=body.max_tokens,
+        source_model_id=body.source_model_id,
     )
     session.add(m)
     await session.commit()
@@ -176,3 +180,116 @@ async def playground(
         tokens_generated=result.tokens_generated,
         model_name=m.model_name or m.name,
     )
+
+
+@router.post("/{model_id}/deploy")
+async def deploy_model(
+    model_id: uuid.UUID,
+    cluster_id: uuid.UUID | None = None,
+    gpu_count: int = 1,
+    memory_gb: int = 40,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("models.write"),
+):
+    """Deploy a model to a K8s cluster via vLLM."""
+    from app.models.compute_cluster import ComputeCluster
+    from app.services.k8s_vllm import full_vllm_lifecycle
+
+    m = await session.get(LLMModel, model_id)
+    if not m:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Model not found")
+
+    cid = cluster_id or m.cluster_id
+    if not cid:
+        raise HTTPException(400, "Must specify cluster_id")
+
+    cluster = await session.get(ComputeCluster, cid)
+    if not cluster or not cluster.kubeconfig_encrypted:
+        raise HTTPException(404, "Cluster not found or missing kubeconfig")
+
+    hf_model_id = m.source_model_id or m.model_name or m.name
+    if not hf_model_id:
+        raise HTTPException(
+            400, "Model needs source_model_id or model_name for deployment",
+        )
+
+    m.deploy_status = "deploying"
+    m.cluster_id = cluster.id
+    session.add(m)
+    await session.commit()
+
+    try:
+        endpoint, dep_name = await full_vllm_lifecycle(
+            kubeconfig_encrypted=cluster.kubeconfig_encrypted,
+            namespace=cluster.namespace,
+            model_name=m.name,
+            hf_model_id=hf_model_id,
+            gpu_count=gpu_count,
+            gpu_type=cluster.gpu_type or "",
+            memory_gb=memory_gb,
+        )
+        m.endpoint_url = endpoint
+        m.deploy_status = "running"
+        m.api_key = "not-needed"  # vLLM internal doesn't need auth
+        session.add(m)
+        await session.commit()
+        await session.refresh(m)
+        return {
+            "status": "deployed",
+            "endpoint_url": endpoint,
+            "deployment_name": dep_name,
+        }
+    except Exception as e:
+        m.deploy_status = "failed"
+        session.add(m)
+        await session.commit()
+        raise HTTPException(500, f"Deployment failed: {e}") from e
+
+
+@router.post("/{model_id}/undeploy")
+async def undeploy_model(
+    model_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("models.write"),
+):
+    """Stop and remove a vLLM deployment for a model."""
+    from urllib.parse import urlparse
+
+    from app.models.compute_cluster import ComputeCluster
+    from app.services.k8s_vllm import cleanup_vllm
+
+    m = await session.get(LLMModel, model_id)
+    if not m:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Model not found")
+
+    if not m.cluster_id:
+        raise HTTPException(400, "Model is not deployed to any cluster")
+
+    cluster = await session.get(ComputeCluster, m.cluster_id)
+    if not cluster or not cluster.kubeconfig_encrypted:
+        raise HTTPException(404, "Cluster not found")
+
+    # Extract deployment name from endpoint URL pattern:
+    # http://vllm-abc12345.namespace.svc.cluster.local:8000/...
+    dep_name = ""
+    if m.endpoint_url:
+        try:
+            host = urlparse(m.endpoint_url).hostname or ""
+            dep_name = host.split(".")[0]  # first segment is the deployment name
+        except Exception:
+            pass
+
+    if dep_name:
+        try:
+            await cleanup_vllm(
+                cluster.kubeconfig_encrypted, cluster.namespace, dep_name,
+            )
+        except Exception as e:
+            logger.warning("Cleanup failed: %s", e)
+
+    m.deploy_status = "stopped"
+    m.endpoint_url = ""
+    session.add(m)
+    await session.commit()
+    await session.refresh(m)
+    return {"status": "undeployed"}

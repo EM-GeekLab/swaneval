@@ -25,6 +25,7 @@ const emptyForm = {
   description: "",
   model_name: "",
   max_tokens: "4096",
+  source_model_id: "",
 };
 
 interface ModelCreateFormProps {
@@ -74,6 +75,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
       description: form.description || undefined,
       model_name: form.model_name || undefined,
       max_tokens: form.max_tokens ? parseInt(form.max_tokens) : undefined,
+      source_model_id: isManaged ? form.model_name : form.source_model_id || undefined,
     });
     onSuccess();
   };

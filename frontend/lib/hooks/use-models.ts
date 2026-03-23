@@ -25,6 +25,7 @@ export function useCreateModel() {
       description?: string;
       model_name?: string;
       max_tokens?: number;
+      source_model_id?: string;
     }) => {
       const res = await api.post<LLMModel>("/models", data);
       return res.data;
@@ -84,5 +85,30 @@ export function usePlayground() {
       const res = await api.post<PlaygroundResponse>(`/models/${model_id}/playground`, body);
       return res.data;
     },
+  });
+}
+
+export function useDeployModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { model_id: string; cluster_id: string; gpu_count?: number; memory_gb?: number }) => {
+      const { model_id, ...params } = data;
+      const res = await api.post<{ status: string; endpoint_url: string; deployment_name: string }>(
+        `/models/${model_id}/deploy`, null, { params },
+      );
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
+  });
+}
+
+export function useUndeployModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (model_id: string) => {
+      const res = await api.post<{ status: string }>(`/models/${model_id}/undeploy`);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
   });
 }

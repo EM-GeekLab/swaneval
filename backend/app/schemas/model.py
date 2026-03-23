@@ -16,6 +16,7 @@ class LLMModelCreate(BaseModel):
     description: str = ""
     model_name: str = ""
     max_tokens: int | None = None
+    source_model_id: str = ""
 
 
 class LLMModelUpdate(BaseModel):
