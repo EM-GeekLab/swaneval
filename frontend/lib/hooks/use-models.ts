@@ -88,6 +88,16 @@ export function usePlayground() {
   });
 }
 
+export function useActiveDeployments() {
+  return useQuery({
+    queryKey: ["models", "deployments"],
+    queryFn: async () => {
+      const res = await api.get<LLMModel[]>("/models/deployments");
+      return res.data;
+    },
+  });
+}
+
 export function useDeployModel() {
   const qc = useQueryClient();
   return useMutation({

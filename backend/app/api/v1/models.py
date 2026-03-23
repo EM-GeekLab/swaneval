@@ -62,6 +62,21 @@ async def list_models(
     return result.all()
 
 
+@router.get("/deployments", response_model=list[LLMModelResponse])
+async def list_deployments(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("models.read"),
+):
+    """List all models with active vLLM deployments."""
+    stmt = (
+        select(LLMModel)
+        .where(LLMModel.deploy_status.in_(["deploying", "running"]))
+        .order_by(col(LLMModel.created_at).desc())
+    )
+    result = await session.exec(stmt)
+    return result.all()
+
+
 @router.get("/{model_id}", response_model=LLMModelResponse)
 async def get_model(
     model_id: uuid.UUID,
@@ -188,6 +203,7 @@ async def deploy_model(
     cluster_id: uuid.UUID | None = None,
     gpu_count: int = 1,
     memory_gb: int = 40,
+    timeout_seconds: int = 0,
     session: AsyncSession = Depends(get_db),
     current_user: User = require_permission("models.write"),
 ):
@@ -233,6 +249,7 @@ async def deploy_model(
             memory_gb=memory_gb,
             hf_token=hf_token,
             image=getattr(cluster, "vllm_image", "") or "",
+            timeout_seconds=timeout_seconds,
         )
         m.endpoint_url = endpoint
         m.deploy_status = "running"

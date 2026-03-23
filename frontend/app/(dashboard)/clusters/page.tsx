@@ -51,6 +51,7 @@ import {
   useProbeCluster,
   useClusterNodes,
 } from "@/lib/hooks/use-clusters";
+import { useActiveDeployments } from "@/lib/hooks/use-models";
 import type { ComputeCluster } from "@/lib/types";
 
 function formatBytes(bytes: number): string {
@@ -93,6 +94,8 @@ function ClusterDetail({
   const { data: nodes = [], isLoading: nodesLoading } = useClusterNodes(
     cluster.id,
   );
+  const { data: allDeployments = [] } = useActiveDeployments();
+  const deployments = allDeployments.filter((m) => m.cluster_id === cluster.id);
   const [probeError, setProbeError] = useState("");
 
   const handleProbe = async () => {
@@ -229,6 +232,39 @@ function ClusterDetail({
             </div>
           )}
         </div>
+
+        {/* Active deployments */}
+        {deployments.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium mb-3">
+              活跃部署
+              <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                ({deployments.length})
+              </span>
+            </h3>
+            <div className="space-y-2">
+              {deployments.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between rounded-lg border px-3 py-2"
+                >
+                  <div>
+                    <span className="text-sm font-medium">{m.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {m.model_name || m.source_model_id || ""}
+                    </span>
+                  </div>
+                  <Badge
+                    variant={m.deploy_status === "running" ? "success" : "warning"}
+                    className="text-[10px]"
+                  >
+                    {m.deploy_status === "running" ? "运行中" : "部署中"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {probeError && (
           <p className="text-sm text-destructive mb-3">{probeError}</p>

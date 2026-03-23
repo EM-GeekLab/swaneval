@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     MS_TOKEN: str = ""
     # ModelScope API token for accessing gated/private datasets
 
+    VLLM_READINESS_TIMEOUT: int = 600
+    # vLLM 部署就绪超时(秒) / vLLM deployment readiness timeout in seconds
+
     SANDBOX_TIMEOUT_SECONDS: int = 10
     SANDBOX_MAX_OUTPUT_BYTES: int = 1_048_576
     SANDBOX_ALLOWED: bool = True

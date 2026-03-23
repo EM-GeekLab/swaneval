@@ -513,12 +513,21 @@ async def full_vllm_lifecycle(
     extra_args: list[str] | None = None,
     image: str = "",
     service_type: str = "NodePort",
+    timeout_seconds: int = 0,
 ) -> tuple[str, str]:
     """Complete vLLM lifecycle: prepare -> deploy -> wait -> return endpoint.
 
     Returns (endpoint_url, deployment_name) so the caller can later invoke
     ``cleanup_vllm`` with the deployment_name once the evaluation finishes.
+
+    Args:
+        timeout_seconds: Readiness timeout. 0 means use the default from
+            settings.VLLM_READINESS_TIMEOUT (600s).
     """
+    from app.config import settings
+
+    effective_timeout = timeout_seconds or settings.VLLM_READINESS_TIMEOUT
+
     await prepare_namespace(kubeconfig_encrypted, namespace)
     await validate_gpu_support(kubeconfig_encrypted, gpu_count)
     dep_name = await deploy_vllm(
@@ -529,6 +538,7 @@ async def full_vllm_lifecycle(
     )
     endpoint = await wait_vllm_ready(
         kubeconfig_encrypted, namespace, dep_name,
+        timeout_seconds=effective_timeout,
         service_type=service_type,
     )
     return endpoint, dep_name
