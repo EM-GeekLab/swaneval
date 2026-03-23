@@ -8,6 +8,7 @@ Create Date: 2026-03-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -17,17 +18,18 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def _create_enum_safe(name: str, values: list[str]) -> sa.Enum:
-    """Create a PostgreSQL enum type if it doesn't exist."""
-    enum = sa.Enum(*values, name=name)
-    bind = op.get_bind()
-    # Use raw SQL for reliable IF NOT EXISTS
+def _create_enum_safe(name: str, values: list[str]):
+    """Create a PostgreSQL enum type if it doesn't exist.
+
+    Returns a postgresql.ENUM with create_type=False so that
+    create_table won't try to CREATE TYPE again.
+    """
     vals = ", ".join(f"'{v}'" for v in values)
-    bind.execute(sa.text(
+    op.execute(sa.text(
         f"DO $$ BEGIN CREATE TYPE {name} AS ENUM ({vals}); "
         f"EXCEPTION WHEN duplicate_object THEN null; END $$;"
     ))
-    return enum
+    return postgresql.ENUM(*values, name=name, create_type=False)
 
 
 def upgrade() -> None:
