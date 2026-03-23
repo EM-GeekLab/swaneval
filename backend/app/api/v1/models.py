@@ -254,7 +254,6 @@ async def deploy_model(
         m.endpoint_url = endpoint
         m.deploy_status = "running"
         m.vllm_deployment_name = dep_name
-        m.api_key = "not-needed"  # vLLM internal doesn't need auth
         session.add(m)
         await session.commit()
         await session.refresh(m)
@@ -267,7 +266,7 @@ async def deploy_model(
         m.deploy_status = "failed"
         session.add(m)
         await session.commit()
-        raise HTTPException(500, f"Deployment failed: {e}") from e
+        raise HTTPException(500, f"部署失败: {e}") from e
 
 
 @router.post("/{model_id}/undeploy")

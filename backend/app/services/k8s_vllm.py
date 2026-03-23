@@ -55,53 +55,59 @@ async def prepare_namespace(
     await asyncio.to_thread(_ensure)
 
 
-async def validate_gpu_support(kubeconfig_encrypted: str, gpu_count: int) -> None:
-    """Check that the cluster supports GPU workloads before deploying.
+async def validate_gpu_support(kubeconfig_encrypted: str, gpu_count: int) -> list[str]:
+    """Check cluster GPU support. Returns a list of warnings (empty = all good).
 
-    Raises ValueError if GPU support is missing.
+    Does NOT raise — deployment proceeds with warnings logged.
+    GPU count of 0 means CPU-only deployment, skips GPU checks entirely.
     """
     if gpu_count <= 0:
-        return  # CPU-only, no GPU validation needed
+        return []
 
-    from kubernetes import client as k8s_client
+    warnings: list[str] = []
 
-    from app.services.k8s_client import create_api_client
+    try:
+        from kubernetes import client as k8s_client
 
-    api_client = await asyncio.to_thread(create_api_client, kubeconfig_encrypted)
+        from app.services.k8s_client import create_api_client
 
-    def _check():
-        # Check RuntimeClass "nvidia" exists
-        node_v1 = k8s_client.NodeV1Api(api_client=api_client)
-        try:
-            node_v1.read_runtime_class("nvidia")
-        except k8s_client.exceptions.ApiException as e:
-            if e.status == 404:
-                raise ValueError(
-                    "集群缺少 NVIDIA RuntimeClass。请安装 NVIDIA GPU Operator 或手动创建 "
-                    "'nvidia' RuntimeClass。参考: https://docs.nvidia.com/datacenter/"
-                    "cloud-native/gpu-operator/latest/getting-started.html"
-                ) from e
-            # Other API errors (e.g., RBAC) — skip check, don't block
-            pass
+        api_client = await asyncio.to_thread(create_api_client, kubeconfig_encrypted)
 
-        # Check at least one node has nvidia.com/gpu
-        core_v1 = k8s_client.CoreV1Api(api_client=api_client)
-        nodes = core_v1.list_node().items
-        total_gpu = sum(
-            int((n.status.allocatable or {}).get("nvidia.com/gpu", 0))
-            for n in nodes
-        )
-        if total_gpu == 0:
-            raise ValueError(
-                "集群中没有检测到可用 GPU (nvidia.com/gpu=0)。请确认已安装 "
-                "NVIDIA Device Plugin 并且节点 GPU 驱动正常。"
+        def _check():
+            w: list[str] = []
+            # Check RuntimeClass "nvidia"
+            node_v1 = k8s_client.NodeV1Api(api_client=api_client)
+            try:
+                node_v1.read_runtime_class("nvidia")
+            except k8s_client.exceptions.ApiException as e:
+                if e.status == 404:
+                    w.append(
+                        "集群缺少 NVIDIA RuntimeClass，GPU 部署可能失败。"
+                        "请安装 NVIDIA GPU Operator。"
+                    )
+                # Other errors (RBAC etc) — skip, don't block
+
+            # Check GPU availability
+            core_v1 = k8s_client.CoreV1Api(api_client=api_client)
+            nodes = core_v1.list_node().items
+            total_gpu = sum(
+                int((n.status.allocatable or {}).get("nvidia.com/gpu", 0))
+                for n in nodes
             )
-        if total_gpu < gpu_count:
-            raise ValueError(
-                f"集群可用 GPU ({total_gpu}) 少于请求数量 ({gpu_count})。"
-            )
+            if total_gpu == 0:
+                w.append("集群中未检测到 GPU (nvidia.com/gpu=0)，将尝试 CPU 模式部署。")
+            elif total_gpu < gpu_count:
+                w.append(f"集群可用 GPU ({total_gpu}) 少于请求数量 ({gpu_count})。")
+            return w
 
-    await asyncio.to_thread(_check)
+        warnings = await asyncio.to_thread(_check)
+    except Exception as e:
+        logger.warning("GPU validation failed (non-blocking): %s", e)
+        warnings.append(f"GPU 检测失败: {e}")
+
+    for w in warnings:
+        logger.warning("GPU validation: %s", w)
+    return warnings
 
 
 async def deploy_vllm(
