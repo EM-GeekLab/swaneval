@@ -37,11 +37,16 @@ async def install_gpu_operator(
 
     Returns: {"ok": bool, "method": str, "message": str}
     """
+    logger.info("Installing GPU support: method=%s", method)
     kubeconfig_yaml = decrypt(kubeconfig_encrypted)
 
     if method == "gpu-operator":
-        return await _install_via_helm(kubeconfig_yaml)
-    return await _install_device_plugin(kubeconfig_yaml)
+        result = await _install_via_helm(kubeconfig_yaml)
+    else:
+        result = await _install_device_plugin(kubeconfig_yaml)
+
+    logger.info("GPU install result: ok=%s, message=%s", result["ok"], result["message"])
+    return result
 
 
 async def _install_device_plugin(kubeconfig_yaml: str) -> dict:
@@ -55,6 +60,7 @@ async def _install_device_plugin(kubeconfig_yaml: str) -> dict:
             kubeconfig_path = tmp.name
 
         try:
+            logger.info("Installing NVIDIA Device Plugin via kubectl apply...")
             result = subprocess.run(
                 [
                     "kubectl", "apply",
@@ -63,16 +69,22 @@ async def _install_device_plugin(kubeconfig_yaml: str) -> dict:
                 ],
                 capture_output=True, text=True, timeout=60,
             )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            logger.info("kubectl apply stdout: %s", stdout)
+            if stderr:
+                logger.info("kubectl apply stderr: %s", stderr)
             if result.returncode != 0:
+                logger.error("kubectl apply failed (rc=%d): %s", result.returncode, stderr)
                 return {
                     "ok": False,
                     "method": "device-plugin",
-                    "message": f"kubectl apply failed: {result.stderr.strip()}",
+                    "message": f"kubectl apply 失败: {stderr}",
                 }
             return {
                 "ok": True,
                 "method": "device-plugin",
-                "message": result.stdout.strip() or "NVIDIA Device Plugin installed",
+                "message": stdout or "NVIDIA Device Plugin 已安装",
             }
         except FileNotFoundError:
             return {
@@ -110,45 +122,56 @@ async def _install_via_helm(kubeconfig_yaml: str) -> dict:
 
         try:
             # Add NVIDIA Helm repo
-            subprocess.run(
+            repo_add = subprocess.run(
                 ["helm", "repo", "add", "nvidia",
                  "https://helm.ngc.nvidia.com/nvidia", "--force-update"],
                 capture_output=True, text=True, timeout=30, env=env,
             )
-            subprocess.run(
+            logger.info("helm repo add: %s", repo_add.stdout.strip() or repo_add.stderr.strip())
+
+            repo_update = subprocess.run(
                 ["helm", "repo", "update"],
-                capture_output=True, text=True, timeout=30, env=env,
+                capture_output=True, text=True, timeout=60, env=env,
+            )
+            logger.info(
+                "helm repo update: %s",
+                repo_update.stdout.strip() or repo_update.stderr.strip(),
             )
 
-            # Install GPU Operator
+            # Install GPU Operator (no --wait, return immediately)
             result = subprocess.run(
                 [
                     "helm", "install", "gpu-operator",
                     "nvidia/gpu-operator",
                     "--namespace", "gpu-operator",
                     "--create-namespace",
-                    "--wait", "--timeout", "5m",
                 ],
-                capture_output=True, text=True, timeout=360, env=env,
+                capture_output=True, text=True, timeout=120, env=env,
             )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            logger.info("helm install stdout: %s", stdout)
+            if stderr:
+                logger.info("helm install stderr: %s", stderr)
+
             if result.returncode != 0:
-                stderr = result.stderr.strip()
                 # Already installed is not an error
                 if "already exists" in stderr or "cannot re-use" in stderr:
                     return {
                         "ok": True,
                         "method": "gpu-operator",
-                        "message": "NVIDIA GPU Operator already installed",
+                        "message": "NVIDIA GPU Operator 已安装",
                     }
                 return {
                     "ok": False,
                     "method": "gpu-operator",
-                    "message": f"Helm install failed: {stderr[:500]}",
+                    "message": f"Helm 安装失败: {stderr[:500]}",
                 }
             return {
                 "ok": True,
                 "method": "gpu-operator",
-                "message": "NVIDIA GPU Operator installed successfully",
+                "message": "GPU Operator 已提交安装，Pod 启动中（可能需要几分钟）。"
+                "请稍后刷新查看 GPU 状态。",
             }
         except FileNotFoundError:
             return {
