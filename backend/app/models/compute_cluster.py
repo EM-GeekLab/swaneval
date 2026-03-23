@@ -17,6 +17,13 @@ class ClusterStatus(str, enum.Enum):
     offline = "offline"
 
 
+class InfraJobStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
 class InfraJobType(str, enum.Enum):
     namespace_setup = "namespace_setup"
     vllm_cache = "vllm_cache"
@@ -78,7 +85,13 @@ class ClusterInfraJob(SQLModel, table=True):
             nullable=False,
         )
     )
-    status: str = Field(default="pending")
+    status: InfraJobStatus = Field(
+        sa_column=Column(
+            SAEnum(InfraJobStatus, name="infrajobstatus", create_constraint=False),
+            nullable=False,
+            default=InfraJobStatus.pending,
+        )
+    )
     log: str = Field(default="")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

@@ -43,6 +43,7 @@ class LLMModelResponse(BaseModel):
     max_tokens: int | None
     created_at: datetime
     deploy_status: str = ""
+    vllm_deployment_name: str = ""
     cluster_id: uuid.UUID | None = None
     source_model_id: str = ""
     last_test_at: datetime | None = None

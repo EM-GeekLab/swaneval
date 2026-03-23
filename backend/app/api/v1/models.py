@@ -3,13 +3,14 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_db, require_permission
 from app.config import settings
+from app.database import get_session
 from app.models.llm_model import LLMModel
 from app.models.user import User
 from app.schemas.model import (
@@ -182,9 +183,53 @@ async def playground(
     )
 
 
+async def _do_deploy(
+    model_id: uuid.UUID,
+    cluster_id: uuid.UUID,
+    gpu_count: int,
+    memory_gb: int,
+) -> None:
+    """Background task: deploy vLLM and update model record on completion."""
+    from app.models.compute_cluster import ComputeCluster
+    from app.services.k8s_vllm import full_vllm_lifecycle
+
+    async for session in get_session():
+        m = await session.get(LLMModel, model_id)
+        cluster = await session.get(ComputeCluster, cluster_id)
+        if not m or not cluster:
+            return
+
+        hf_model_id = m.source_model_id or m.model_name or m.name
+        hf_token = m.api_key if m.model_type in ("huggingface", "modelscope") else ""
+
+        try:
+            endpoint, dep_name = await full_vllm_lifecycle(
+                kubeconfig_encrypted=cluster.kubeconfig_encrypted,
+                namespace=cluster.namespace,
+                model_name=m.name,
+                hf_model_id=hf_model_id,
+                gpu_count=gpu_count,
+                gpu_type=cluster.gpu_type or "",
+                memory_gb=memory_gb,
+                hf_token=hf_token,
+                image=cluster.vllm_image or "",
+            )
+            m.endpoint_url = endpoint
+            m.deploy_status = "running"
+            m.vllm_deployment_name = dep_name
+            session.add(m)
+            await session.commit()
+        except Exception as e:
+            logger.error("Background deploy failed for model %s: %s", model_id, e)
+            m.deploy_status = "failed"
+            session.add(m)
+            await session.commit()
+
+
 @router.post("/{model_id}/deploy")
 async def deploy_model(
     model_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     cluster_id: uuid.UUID | None = None,
     gpu_count: int = 1,
     memory_gb: int = 40,
@@ -193,11 +238,13 @@ async def deploy_model(
 ):
     """Deploy a model to a K8s cluster via vLLM."""
     from app.models.compute_cluster import ComputeCluster
-    from app.services.k8s_vllm import full_vllm_lifecycle
 
     m = await session.get(LLMModel, model_id)
     if not m:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Model not found")
+
+    if m.deploy_status in ("deploying", "running"):
+        raise HTTPException(409, "Model is already deploying or deployed")
 
     cid = cluster_id or m.cluster_id
     if not cid:
@@ -256,8 +303,6 @@ async def undeploy_model(
     current_user: User = require_permission("models.write"),
 ):
     """Stop and remove a vLLM deployment for a model."""
-    from urllib.parse import urlparse
-
     from app.models.compute_cluster import ComputeCluster
     from app.services.k8s_vllm import cleanup_vllm
 
@@ -272,26 +317,33 @@ async def undeploy_model(
     if not cluster or not cluster.kubeconfig_encrypted:
         raise HTTPException(404, "Cluster not found")
 
-    # Extract deployment name from endpoint URL pattern:
-    # http://vllm-abc12345.namespace.svc.cluster.local:8000/...
-    dep_name = ""
-    if m.endpoint_url:
+    dep_name = m.vllm_deployment_name
+    if not dep_name:
+        # Fallback: try extracting from endpoint URL
         try:
+            from urllib.parse import urlparse
             host = urlparse(m.endpoint_url).hostname or ""
-            dep_name = host.split(".")[0]  # first segment is the deployment name
+            dep_name = host.split(".")[0]
         except Exception:
             pass
 
+    cleanup_ok = False
     if dep_name:
         try:
             await cleanup_vllm(
                 cluster.kubeconfig_encrypted, cluster.namespace, dep_name,
             )
+            cleanup_ok = True
         except Exception as e:
             logger.warning("Cleanup failed: %s", e)
 
-    m.deploy_status = "stopped"
-    m.endpoint_url = ""
+    if cleanup_ok or not dep_name:
+        m.deploy_status = "stopped"
+        m.endpoint_url = ""
+        m.vllm_deployment_name = ""
+    else:
+        m.deploy_status = "cleanup_failed"
+        # Keep endpoint_url and deployment_name so retry is possible
     session.add(m)
     await session.commit()
     await session.refresh(m)

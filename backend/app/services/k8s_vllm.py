@@ -16,13 +16,11 @@ import asyncio
 import logging
 import uuid
 
-import yaml
-
-from app.services.encryption import decrypt
+from app.services.k8s_client import create_both
 
 logger = logging.getLogger(__name__)
 
-# Default vLLM image — matches official Helm chart
+# Default vLLM image -- matches official Helm chart
 VLLM_IMAGE = "vllm/vllm-openai:latest"
 
 
@@ -44,9 +42,8 @@ async def prepare_namespace(
     """Ensure the namespace exists, creating it if necessary."""
     from kubernetes import client as k8s_client
 
-    core_v1, _ = await asyncio.to_thread(
-        _get_k8s_clients, kubeconfig_encrypted,
-    )
+    from app.services.k8s_client import create_core_v1
+    core_v1 = await asyncio.to_thread(create_core_v1, kubeconfig_encrypted)
 
     def _ensure():
         try:
@@ -62,6 +59,55 @@ async def prepare_namespace(
                 raise
 
     await asyncio.to_thread(_ensure)
+
+
+async def validate_gpu_support(kubeconfig_encrypted: str, gpu_count: int) -> None:
+    """Check that the cluster supports GPU workloads before deploying.
+
+    Raises ValueError if GPU support is missing.
+    """
+    if gpu_count <= 0:
+        return  # CPU-only, no GPU validation needed
+
+    from kubernetes import client as k8s_client
+
+    from app.services.k8s_client import create_api_client
+
+    api_client = await asyncio.to_thread(create_api_client, kubeconfig_encrypted)
+
+    def _check():
+        # Check RuntimeClass "nvidia" exists
+        node_v1 = k8s_client.NodeV1Api(api_client=api_client)
+        try:
+            node_v1.read_runtime_class("nvidia")
+        except k8s_client.exceptions.ApiException as e:
+            if e.status == 404:
+                raise ValueError(
+                    "集群缺少 NVIDIA RuntimeClass。请安装 NVIDIA GPU Operator 或手动创建 "
+                    "'nvidia' RuntimeClass。参考: https://docs.nvidia.com/datacenter/"
+                    "cloud-native/gpu-operator/latest/getting-started.html"
+                ) from e
+            # Other API errors (e.g., RBAC) — skip check, don't block
+            pass
+
+        # Check at least one node has nvidia.com/gpu
+        core_v1 = k8s_client.CoreV1Api(api_client=api_client)
+        nodes = core_v1.list_node().items
+        total_gpu = sum(
+            int((n.status.allocatable or {}).get("nvidia.com/gpu", 0))
+            for n in nodes
+        )
+        if total_gpu == 0:
+            raise ValueError(
+                "集群中没有检测到可用 GPU (nvidia.com/gpu=0)。请确认已安装 "
+                "NVIDIA Device Plugin 并且节点 GPU 驱动正常。"
+            )
+        if total_gpu < gpu_count:
+            raise ValueError(
+                f"集群可用 GPU ({total_gpu}) 少于请求数量 ({gpu_count})。"
+            )
+
+    await asyncio.to_thread(_check)
 
 
 async def deploy_vllm(
@@ -97,7 +143,7 @@ async def deploy_vllm(
     )
     dep_name = deployment_name or f"vllm-{uuid.uuid4().hex[:8]}"
 
-    # ── Build container args (matches vLLM Helm chart) ──
+    # -- Build container args (matches vLLM Helm chart) --
     args = [
         "--model", hf_model_id,
         "--port", "8000",
@@ -109,7 +155,7 @@ async def deploy_vllm(
     if extra_args:
         args += extra_args
 
-    # ── Environment variables ──
+    # -- Environment variables --
     env = [
         k8s_client.V1EnvVar(name="VLLM_LOGGING_LEVEL", value="INFO"),
     ]
@@ -118,7 +164,7 @@ async def deploy_vllm(
             name="HUGGING_FACE_HUB_TOKEN", value=hf_token,
         ))
 
-    # ── Resource requirements ──
+    # -- Resource requirements --
     use_gpu = gpu_count > 0
     resources = k8s_client.V1ResourceRequirements(
         limits={
@@ -133,7 +179,7 @@ async def deploy_vllm(
         },
     )
 
-    # ── Volume mounts — /dev/shm for tensor parallelism shared memory ──
+    # -- Volume mounts -- /dev/shm for tensor parallelism shared memory --
     volume_mounts = [
         k8s_client.V1VolumeMount(
             name="dshm", mount_path="/dev/shm",
@@ -149,7 +195,7 @@ async def deploy_vllm(
         ),
     ]
 
-    # ── Health probes (matches official Helm chart) ──
+    # -- Health probes (matches official Helm chart) --
     readiness_probe = k8s_client.V1Probe(
         http_get=k8s_client.V1HTTPGetAction(path="/health", port=8000),
         initial_delay_seconds=5,
@@ -176,7 +222,7 @@ async def deploy_vllm(
         liveness_probe=liveness_probe,
     )
 
-    # ── Node affinity for GPU type (matches Helm chart gpu_models) ──
+    # -- Node affinity for GPU type (matches Helm chart gpu_models) --
     affinity = None
     if gpu_type and use_gpu:
         affinity = k8s_client.V1Affinity(
@@ -319,9 +365,13 @@ async def wait_vllm_ready(
     core_v1, apps_v1 = await asyncio.to_thread(
         _get_k8s_clients, kubeconfig_encrypted,
     )
-    elapsed = 0
+    t0 = _time.monotonic()
 
-    while elapsed < timeout_seconds:
+    while True:
+        elapsed = _time.monotonic() - t0
+        if elapsed >= timeout_seconds:
+            break
+
         def _check():
             dep = apps_v1.read_namespaced_deployment(
                 deployment_name, namespace,
@@ -346,11 +396,10 @@ async def wait_vllm_ready(
             return endpoint
 
         await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
-        if elapsed % 30 == 0:  # Log every 30s, not every poll
+        if int(elapsed) % 30 < poll_interval:
             logger.info(
                 "Waiting for vLLM %s... (%ds/%ds)",
-                deployment_name, elapsed, timeout_seconds,
+                deployment_name, int(elapsed), timeout_seconds,
             )
 
     raise TimeoutError(
@@ -389,26 +438,54 @@ async def cleanup_vllm(
     kubeconfig_encrypted: str,
     namespace: str,
     deployment_name: str,
-) -> None:
-    """Delete vLLM deployment and service after task completion."""
+) -> dict:
+    """Delete vLLM deployment and service. Returns cleanup status."""
     core_v1, apps_v1 = await asyncio.to_thread(
         _get_k8s_clients, kubeconfig_encrypted,
     )
 
     def _delete():
+        import time
+
+        dep_ok = False
+        svc_ok = False
+        dep_err = ""
+        svc_err = ""
+
         try:
             apps_v1.delete_namespaced_deployment(deployment_name, namespace)
-            logger.info("Deleted deployment %s", deployment_name)
-        except Exception:
-            logger.warning("Failed to delete deployment %s", deployment_name, exc_info=True)
+            dep_ok = True
+        except Exception as e:
+            dep_err = str(e)
+            logger.warning("Failed to delete deployment %s: %s", deployment_name, e)
 
         try:
             core_v1.delete_namespaced_service(deployment_name, namespace)
-            logger.info("Deleted service %s", deployment_name)
-        except Exception:
-            logger.warning("Failed to delete service %s", deployment_name, exc_info=True)
+            svc_ok = True
+        except Exception as e:
+            svc_err = str(e)
+            logger.warning("Failed to delete service %s: %s", deployment_name, e)
 
-    await asyncio.to_thread(_delete)
+        # Wait briefly for pods to terminate (max 30s)
+        if dep_ok:
+            for _ in range(6):
+                pods = core_v1.list_namespaced_pod(
+                    namespace, label_selector=f"app={deployment_name}",
+                )
+                if not pods.items:
+                    break
+                time.sleep(5)
+
+        return {"deployment_deleted": dep_ok, "service_deleted": svc_ok,
+                "deployment_error": dep_err, "service_error": svc_err}
+
+    result = await asyncio.to_thread(_delete)
+    if not result["deployment_deleted"] and not result["service_deleted"]:
+        raise RuntimeError(
+            f"Cleanup failed completely: deployment={result['deployment_error']}, "
+            f"service={result['service_error']}"
+        )
+    return result
 
 
 async def full_vllm_lifecycle(
@@ -431,6 +508,7 @@ async def full_vllm_lifecycle(
     ``cleanup_vllm`` with the deployment_name once the evaluation finishes.
     """
     await prepare_namespace(kubeconfig_encrypted, namespace)
+    await validate_gpu_support(kubeconfig_encrypted, gpu_count)
     dep_name = await deploy_vllm(
         kubeconfig_encrypted, namespace, model_name, hf_model_id,
         gpu_count=gpu_count, gpu_type=gpu_type, memory_gb=memory_gb,

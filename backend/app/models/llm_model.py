@@ -79,6 +79,9 @@ class LLMModel(SQLModel, table=True):
     deploy_status: str = Field(default="")
     # 部署状态: "", "deploying", "running", "stopped", "failed"
 
+    vllm_deployment_name: str = Field(default="")
+    # vLLM K8s deployment name for cleanup tracking
+
     cluster_id: uuid.UUID | None = Field(default=None, foreign_key="compute_clusters.id")
     # 部署到的集群ID
 
