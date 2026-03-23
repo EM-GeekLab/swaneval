@@ -9,12 +9,14 @@ class ClusterCreate(BaseModel):
     kubeconfig: str  # raw YAML
     namespace: str = "default"
     description: str = ""
+    vllm_image: str = ""  # 留空使用默认镜像
 
 
 class ClusterUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     namespace: str | None = None
+    vllm_image: str | None = None
 
 
 class ClusterResponse(BaseModel):
@@ -32,6 +34,7 @@ class ClusterResponse(BaseModel):
     cpu_total_millicores: int
     memory_total_bytes: int
     node_count: int
+    vllm_image: str = ""
     vllm_cache_ready: bool
     last_probed_at: datetime | None
     created_at: datetime

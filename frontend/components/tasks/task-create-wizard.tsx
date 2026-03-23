@@ -27,6 +27,7 @@ import { useModels } from "@/lib/hooks/use-models";
 import { useDatasets, useDatasetPreview } from "@/lib/hooks/use-datasets";
 import { useCriteria } from "@/lib/hooks/use-criteria";
 import { useCreateTask } from "@/lib/hooks/use-tasks";
+import { useClusters } from "@/lib/hooks/use-clusters";
 
 const STEPS = [
   { title: "选择模型" },
@@ -49,6 +50,9 @@ const emptyForm = {
   gpu_ids: "",
   env_vars: "",
   execution_backend: "external_api",
+  cluster_id: "",
+  gpu_count: "1",
+  memory_gb: "40",
   field_mappings: {} as Record<string, { prompt_field: string; expected_field: string }>,
 };
 
@@ -74,6 +78,7 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
   const datasets = useMemo(() => datasetsData?.items ?? [], [datasetsData]);
   const { data: criteria = [] } = useCriteria();
   const createTask = useCreateTask();
+  const { data: clusters = [] } = useClusters();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ ...emptyForm, dataset_ids: [] as string[], criteria_ids: [] as string[] });
@@ -106,7 +111,10 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       );
     }
     if (step === 2) return !!form.name;
-    if (step === 3) return true;
+    if (step === 3) {
+      if (form.execution_backend === "k8s_vllm" && !form.cluster_id) return false;
+      return true;
+    }
     return true;
   };
 
@@ -119,6 +127,15 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
     if (Object.keys(form.field_mappings).length > 0) {
       paramsObj.field_mappings = form.field_mappings;
     }
+    // Build resource_config for K8s
+    let resourceConfig = "";
+    if (form.execution_backend === "k8s_vllm") {
+      resourceConfig = JSON.stringify({
+        gpu_count: parseInt(form.gpu_count) || 1,
+        memory_gb: parseInt(form.memory_gb) || 40,
+      });
+    }
+
     await createTask.mutateAsync({
       name: form.name,
       model_id: form.model_id,
@@ -130,6 +147,8 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
       gpu_ids: form.gpu_ids || undefined,
       env_vars: form.env_vars || undefined,
       execution_backend: form.execution_backend,
+      resource_config: resourceConfig || undefined,
+      cluster_id: form.cluster_id || undefined,
     });
     onSuccess();
   };
@@ -440,6 +459,51 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                 选择任务执行方式：外部 API 直接调用模型接口，本地 Worker 在 GPU 服务器运行，K8s/vLLM 在集群部署
               </p>
             </PanelField>
+            {form.execution_backend === "k8s_vllm" && (
+              <>
+                <PanelField label="计算集群" required>
+                  <Select
+                    value={form.cluster_id}
+                    onValueChange={(v) => setForm({ ...form, cluster_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择集群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clusters.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                          暂无集群，<a href="/clusters" className="text-primary hover:underline">去添加</a>
+                        </div>
+                      ) : clusters.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} — {c.gpu_count} GPU ({c.gpu_type || "未知"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </PanelField>
+                <div className="grid grid-cols-2 gap-2">
+                  <PanelField label="GPU 数量">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.gpu_count}
+                      onChange={(e) => setForm({ ...form, gpu_count: e.target.value })}
+                      className="font-mono"
+                    />
+                  </PanelField>
+                  <PanelField label="显存 (GB)">
+                    <Input
+                      type="number"
+                      min="8"
+                      value={form.memory_gb}
+                      onChange={(e) => setForm({ ...form, memory_gb: e.target.value })}
+                      className="font-mono"
+                    />
+                  </PanelField>
+                </div>
+              </>
+            )}
             <PanelField label="GPU 编号">
               <Input
                 value={form.gpu_ids}
@@ -560,6 +624,15 @@ export function TaskCreateWizard({ onSuccess }: TaskCreateWizardProps) {
                 form.execution_backend === "external_api" ? "外部 API" :
                 form.execution_backend === "local_worker" ? "本地 Worker" : "K8s / vLLM"
               } />
+              {form.execution_backend === "k8s_vllm" && form.cluster_id && (
+                <>
+                  <DetailRow label="集群" value={
+                    clusters.find(c => c.id === form.cluster_id)?.name ?? form.cluster_id
+                  } />
+                  <DetailRow label="GPU 数量" value={form.gpu_count} />
+                  <DetailRow label="显存" value={`${form.memory_gb} GB`} />
+                </>
+              )}
             </div>
 
             {/* Config JSON preview toggle */}

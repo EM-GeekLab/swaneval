@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -142,8 +149,8 @@ function ClusterDetail({
           />
           <DetailField label="创建时间" value={formatTime(cluster.created_at)} />
           <DetailField
-            label="vLLM 缓存"
-            value={cluster.vllm_cache_ready ? "已就绪" : "未就绪"}
+            label="vLLM 镜像"
+            value={cluster.vllm_image || "默认 (Docker Hub)"}
           />
         </div>
 
@@ -300,6 +307,7 @@ export default function ClustersPage() {
   const [createKubeconfig, setCreateKubeconfig] = useState("");
   const [createNamespace, setCreateNamespace] = useState("");
   const [createDescription, setCreateDescription] = useState("");
+  const [createVllmImage, setCreateVllmImage] = useState("");
   const [createError, setCreateError] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -318,12 +326,14 @@ export default function ClustersPage() {
         kubeconfig: createKubeconfig,
         namespace: createNamespace || undefined,
         description: createDescription || undefined,
+        vllm_image: createVllmImage || undefined,
       });
       setShowCreate(false);
       setCreateName("");
       setCreateKubeconfig("");
       setCreateNamespace("");
       setCreateDescription("");
+      setCreateVllmImage("");
     } catch (err: unknown) {
       setCreateError(extractErrorDetail(err, "创建失败"));
     }
@@ -483,6 +493,35 @@ export default function ClustersPage() {
                 rows={6}
                 className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono resize-none"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">vLLM 镜像源</Label>
+              <Select value={createVllmImage} onValueChange={setCreateVllmImage}>
+                <SelectTrigger className="h-9 font-mono text-xs">
+                  <SelectValue placeholder="默认 (Docker Hub)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">默认 (vllm/vllm-openai:latest)</SelectItem>
+                  <SelectItem value="registry.cn-hangzhou.aliyuncs.com/modelscope-repo/vllm-openai:latest">
+                    阿里云 (modelscope-repo)
+                  </SelectItem>
+                  <SelectItem value="swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/vllm/vllm-openai:latest">
+                    华为云 (ddn-k8s)
+                  </SelectItem>
+                  <SelectItem value="custom">自定义...</SelectItem>
+                </SelectContent>
+              </Select>
+              {createVllmImage === "custom" && (
+                <Input
+                  value=""
+                  onChange={(e) => setCreateVllmImage(e.target.value)}
+                  placeholder="registry.example.com/vllm/vllm-openai:latest"
+                  className="h-8 font-mono text-xs mt-1"
+                />
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                国内网络建议使用阿里云或华为云镜像加速 vLLM 部署
+              </p>
             </div>
             {createError && (
               <p className="text-sm text-destructive">{createError}</p>

@@ -496,7 +496,6 @@ async def run_task(task_id: uuid.UUID):
             execution_backend = getattr(task, "execution_backend", "external_api") or "external_api"
             if execution_backend == "k8s_vllm":
                 from app.models.compute_cluster import ComputeCluster
-                from app.services.k8s_vllm import full_vllm_lifecycle
 
                 cluster_id = task.cluster_id or model.cluster_id
                 if not cluster_id:
@@ -509,73 +508,87 @@ async def run_task(task_id: uuid.UUID):
                         f"Cluster {cluster_id} not found or has no kubeconfig"
                     )
 
-                # Determine HF model ID to deploy
-                hf_model_id = (
-                    model.source_model_id
-                    or model.model_name
-                    or model.name
-                )
-                if not hf_model_id:
-                    raise ConfigError(
-                        "Model must have source_model_id or model_name for vLLM deployment"
+                # Skip deployment if model is already running on a cluster
+                if model.deploy_status == "running" and model.endpoint_url:
+                    logger.info(
+                        "Task %s: model '%s' already deployed at %s, reusing",
+                        task_id, model.name, model.endpoint_url,
+                    )
+                    # Don't cleanup pre-existing deployment
+                    _vllm_deployment = None
+                else:
+                    # Deploy vLLM from scratch
+                    from app.services.k8s_vllm import full_vllm_lifecycle
+
+                    # Determine HF model ID to deploy
+                    hf_model_id = (
+                        model.source_model_id
+                        or model.model_name
+                        or model.name
+                    )
+                    if not hf_model_id:
+                        raise ConfigError(
+                            "Model must have source_model_id or model_name for vLLM deployment"
+                        )
+
+                    # Parse resource config
+                    res_cfg = {}
+                    if hasattr(task, "resource_config") and task.resource_config:
+                        try:
+                            res_cfg = json.loads(task.resource_config)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                    gpu_count = res_cfg.get("gpu_count", 1)
+                    gpu_type = res_cfg.get("gpu_type", cluster.gpu_type or "")
+                    memory_gb = res_cfg.get("memory_gb", 40)
+
+                    logger.info(
+                        "Task %s: deploying vLLM for '%s' on cluster '%s' "
+                        "(%d GPU, %s, %dGB)",
+                        task_id, hf_model_id, cluster.name,
+                        gpu_count, gpu_type, memory_gb,
                     )
 
-                # Parse resource config
-                res_cfg = {}
-                if hasattr(task, "resource_config") and task.resource_config:
-                    try:
-                        res_cfg = json.loads(task.resource_config)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-
-                gpu_count = res_cfg.get("gpu_count", 1)
-                gpu_type = res_cfg.get("gpu_type", cluster.gpu_type or "")
-                memory_gb = res_cfg.get("memory_gb", 40)
-
-                logger.info(
-                    "Task %s: deploying vLLM for '%s' on cluster '%s' "
-                    "(%d GPU, %s, %dGB)",
-                    task_id, hf_model_id, cluster.name,
-                    gpu_count, gpu_type, memory_gb,
-                )
-
-                # Update model deploy status
-                model.deploy_status = "deploying"
-                model.cluster_id = cluster.id
-                session.add(model)
-                await session.commit()
-
-                try:
-                    vllm_endpoint, _vllm_deployment = await full_vllm_lifecycle(
-                        kubeconfig_encrypted=cluster.kubeconfig_encrypted,
-                        namespace=cluster.namespace,
-                        model_name=model.name,
-                        hf_model_id=hf_model_id,
-                        gpu_count=gpu_count,
-                        gpu_type=gpu_type,
-                        memory_gb=memory_gb,
-                    )
-                    _vllm_kubeconfig = cluster.kubeconfig_encrypted
-                    _vllm_namespace = cluster.namespace
-                except Exception as e:
-                    model.deploy_status = "failed"
+                    # Update model deploy status
+                    model.deploy_status = "deploying"
+                    model.cluster_id = cluster.id
                     session.add(model)
                     await session.commit()
-                    raise ConfigError(
-                        f"vLLM deployment failed: {e}"
-                    ) from e
 
-                # Override model endpoint with the deployed vLLM endpoint
-                model.endpoint_url = vllm_endpoint
-                model.deploy_status = "running"
-                model.api_key = "dummy"  # vLLM doesn't need auth
-                session.add(model)
-                await session.commit()
+                    try:
+                        vllm_image = getattr(cluster, "vllm_image", "") or ""
+                        vllm_endpoint, _vllm_deployment = await full_vllm_lifecycle(
+                            kubeconfig_encrypted=cluster.kubeconfig_encrypted,
+                            namespace=cluster.namespace,
+                            model_name=model.name,
+                            hf_model_id=hf_model_id,
+                            gpu_count=gpu_count,
+                            gpu_type=gpu_type,
+                            memory_gb=memory_gb,
+                            image=vllm_image,
+                        )
+                        _vllm_kubeconfig = cluster.kubeconfig_encrypted
+                        _vllm_namespace = cluster.namespace
+                    except Exception as e:
+                        model.deploy_status = "failed"
+                        session.add(model)
+                        await session.commit()
+                        raise ConfigError(
+                            f"vLLM deployment failed: {e}"
+                        ) from e
 
-                logger.info(
-                    "Task %s: vLLM deployed at %s (deployment=%s)",
-                    task_id, vllm_endpoint, _vllm_deployment,
-                )
+                    # Override model endpoint with the deployed vLLM endpoint
+                    model.endpoint_url = vllm_endpoint
+                    model.deploy_status = "running"
+                    model.api_key = "dummy"  # vLLM doesn't need auth
+                    session.add(model)
+                    await session.commit()
+
+                    logger.info(
+                        "Task %s: vLLM deployed at %s (deployment=%s)",
+                        task_id, vllm_endpoint, _vllm_deployment,
+                    )
 
             logger.info(
                 "Task %s using model '%s' (%s @ %s) [backend=%s]",

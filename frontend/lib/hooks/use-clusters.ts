@@ -26,7 +26,7 @@ export function useCluster(id: string) {
 export function useCreateCluster() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; kubeconfig: string; namespace?: string; description?: string }) => {
+    mutationFn: async (data: { name: string; kubeconfig: string; namespace?: string; description?: string; vllm_image?: string }) => {
       const res = await api.post<ComputeCluster>("/clusters", data);
       return res.data;
     },

@@ -47,6 +47,9 @@ class ComputeCluster(SQLModel, table=True):
     cpu_total_millicores: int = Field(default=0)
     memory_total_bytes: int = Field(default=0, sa_type=BigInteger)
     node_count: int = Field(default=0)
+    vllm_image: str = Field(default="")
+    # vLLM 镜像地址，空则使用默认 vllm/vllm-openai:latest
+
     vllm_cache_ready: bool = Field(default=False)
     last_probed_at: datetime | None = Field(
         default=None, sa_type=DateTime(timezone=True),

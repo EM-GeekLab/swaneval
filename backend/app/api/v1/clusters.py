@@ -98,6 +98,7 @@ async def create_cluster(
         kubeconfig_encrypted=kubeconfig_encrypted,
         api_server_url=info["api_server_url"],
         namespace=body.namespace,
+        vllm_image=body.vllm_image,
         status=ClusterStatus.connecting,
         created_by=current_user.id,
     )
@@ -153,6 +154,8 @@ async def update_cluster(
         cluster.description = body.description
     if body.namespace is not None:
         cluster.namespace = body.namespace
+    if body.vllm_image is not None:
+        cluster.vllm_image = body.vllm_image
 
     cluster.updated_at = datetime.now(timezone.utc)
     session.add(cluster)

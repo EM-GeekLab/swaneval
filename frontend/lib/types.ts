@@ -249,6 +249,7 @@ export interface ComputeCluster {
   cpu_total_millicores: number;
   memory_total_bytes: number;
   node_count: number;
+  vllm_image: string;
   vllm_cache_ready: boolean;
   last_probed_at: string | null;
   created_at: string;

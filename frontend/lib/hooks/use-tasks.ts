@@ -100,6 +100,8 @@ export function useCreateTask() {
       gpu_ids?: string;
       env_vars?: string;
       execution_backend?: string;
+      resource_config?: string;
+      cluster_id?: string;
     }) => {
       const res = await api.post<EvalTask>("/tasks", data);
       return res.data;
