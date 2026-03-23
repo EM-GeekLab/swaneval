@@ -238,7 +238,9 @@ async def deploy_model(
     await session.commit()
 
     try:
-        hf_token = getattr(current_user, "hf_token", "") or settings.HF_TOKEN or ""
+        # Refresh user to avoid lazy-load greenlet error on hf_token
+        await session.refresh(current_user)
+        hf_token = current_user.hf_token or settings.HF_TOKEN or ""
         endpoint, dep_name = await full_vllm_lifecycle(
             kubeconfig_encrypted=cluster.kubeconfig_encrypted,
             namespace=cluster.namespace,
