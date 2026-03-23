@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { EvalResult, LeaderboardEntry, TaskSummaryEntry, PaginatedResponse } from "@/lib/types";
 
@@ -12,6 +12,8 @@ export function useResults(taskId?: string, page = 1, pageSize = 50, enabled = t
       return res.data;
     },
     enabled,
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -24,6 +26,7 @@ export function useLeaderboard(criterionId?: string) {
       const res = await api.get<LeaderboardEntry[]>("/results/leaderboard", { params });
       return res.data;
     },
+    staleTime: 30_000,
   });
 }
 
@@ -48,7 +51,7 @@ export function useTaskSummary(taskId: string, refetchInterval?: number | false)
 
 export function useErrorResults(taskId: string, page = 1, pageSize = 50, refetchInterval?: number | false) {
   return useQuery({
-    queryKey: ["results", "errors", taskId, page, pageSize],
+    queryKey: ["results", "errors-paginated", taskId, page, pageSize],
     queryFn: async () => {
       const res = await api.get<PaginatedResponse<EvalResult>>("/results/errors", {
         params: { task_id: taskId, page, page_size: pageSize },
@@ -57,12 +60,13 @@ export function useErrorResults(taskId: string, page = 1, pageSize = 50, refetch
     },
     enabled: !!taskId,
     refetchInterval,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useErrorAnalysis(taskId: string, errorOnly: boolean = false) {
   return useQuery({
-    queryKey: ["results", "errors", taskId, errorOnly],
+    queryKey: ["results", "errors-analysis", taskId, errorOnly],
     queryFn: async () => {
       const res = await api.get<PaginatedResponse<EvalResult>>("/results/errors", {
         params: { task_id: taskId, error_only: errorOnly, page_size: 50 },

@@ -9,6 +9,7 @@ export function useClusters() {
       const res = await api.get<ComputeCluster[]>("/clusters");
       return res.data;
     },
+    staleTime: 30_000,
   });
 }
 
@@ -20,6 +21,7 @@ export function useCluster(id: string) {
       return res.data;
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -61,5 +63,6 @@ export function useClusterNodes(id: string) {
       return res.data;
     },
     enabled: !!id,
+    staleTime: 10_000,
   });
 }

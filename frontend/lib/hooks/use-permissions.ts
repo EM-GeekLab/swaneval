@@ -9,6 +9,7 @@ export function usePermissionGroups() {
       const res = await api.get<PermissionGroup[]>("/permissions/groups");
       return res.data;
     },
+    staleTime: 120_000,
   });
 }
 
@@ -83,6 +84,7 @@ export function useResourceAcls(resourceType?: string, resourceId?: string) {
       const res = await api.get<ResourceAcl[]>("/permissions/acls", { params });
       return res.data;
     },
+    staleTime: 120_000,
   });
 }
 

@@ -41,6 +41,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { formatTime } from "@/lib/time";
 import { extractErrorDetail } from "@/lib/utils";
@@ -337,7 +338,7 @@ function DetailField({ label, value }: { label: string; value: string }) {
 }
 
 export default function ClustersPage() {
-  const { data: clusters = [], isLoading } = useClusters();
+  const { data: clusters = [], isLoading, isFetching } = useClusters();
   const createCluster = useCreateCluster();
   const deleteCluster = useDeleteCluster();
 
@@ -417,6 +418,7 @@ export default function ClustersPage() {
                 </span>{" "}
                 个集群
               </span>
+              <RefreshIndicator isFetching={isFetching} isLoading={isLoading} />
             </div>
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <Plus className="h-4 w-4 mr-1" />

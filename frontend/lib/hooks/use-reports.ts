@@ -14,6 +14,7 @@ export function useReport(taskId: string, reportType: ReportType) {
       return res.data;
     },
     enabled: !!taskId,
+    staleTime: 0,
   });
 }
 
@@ -25,6 +26,7 @@ export function useReportList(taskId?: string) {
       const res = await api.get<ReportListItem[]>("/reports", { params });
       return res.data;
     },
+    staleTime: 30_000,
   });
 }
 
@@ -36,6 +38,7 @@ export function useReportDetail(reportId: string) {
       return res.data;
     },
     enabled: !!reportId,
+    staleTime: 60_000,
   });
 }
 

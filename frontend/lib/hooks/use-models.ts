@@ -9,6 +9,7 @@ export function useModels() {
       const res = await api.get<LLMModel[]>("/models");
       return res.data;
     },
+    staleTime: 30_000,
   });
 }
 

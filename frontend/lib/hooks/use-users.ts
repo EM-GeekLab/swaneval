@@ -9,6 +9,7 @@ export function useUsers() {
       const res = await api.get<User[]>("/users");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 
@@ -69,6 +70,7 @@ export function useUserTokens() {
       const res = await api.get<{ hf_token_set: boolean; ms_token_set: boolean }>("/auth/tokens");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 

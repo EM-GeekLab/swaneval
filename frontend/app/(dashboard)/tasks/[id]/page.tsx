@@ -25,6 +25,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ArrowLeft, Pause, Play, XCircle, RotateCcw, AlertTriangle, Trash2, BarChart3 } from "lucide-react";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { useState } from "react";
 import { utc } from "@/lib/utils";
 import { estimateEta } from "@/components/tasks/task-constants";
@@ -67,10 +68,11 @@ const statusVariant = (
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: task, isLoading } = useTask(id);
+  const { data: task, isLoading, isFetching: taskFetching } = useTask(id);
   const isRunning = task?.status === "running" || task?.status === "pending";
   const pollInterval = isRunning ? 3000 : false;
-  const { data: subtasks = [] } = useSubtasks(id);
+  const { data: subtasks = [], isFetching: subtasksFetching } = useSubtasks(id);
+  const isFetching = taskFetching || subtasksFetching;
   const { data: summary = [] } = useTaskSummary(id, pollInterval);
   const { data: errorsData } = useErrorResults(id, 1, 50, pollInterval);
   const errors = errorsData?.items ?? [];
@@ -134,7 +136,10 @@ export default function TaskDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-semibold">{task.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold">{task.name}</h1>
+            <RefreshIndicator isFetching={isFetching} isLoading={isLoading} />
+          </div>
           <p className="text-xs text-muted-foreground">
             创建于 {formatTime(task.created_at)}
           </p>

@@ -12,6 +12,7 @@ export function useBenchmarks(modelName?: string, benchmarkName?: string) {
       const res = await api.get<ExternalBenchmark[]>("/benchmarks", { params });
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 

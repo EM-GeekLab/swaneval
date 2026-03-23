@@ -58,7 +58,13 @@ export function useSubtasks(taskId: string) {
       return res.data;
     },
     enabled: !!taskId,
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const subs = query.state.data;
+      const hasActive = subs?.some((s: { status: string }) =>
+        s.status === "running" || s.status === "pending"
+      );
+      return hasActive ? 3000 : false;
+    },
   });
 }
 
@@ -69,7 +75,10 @@ export function useQueueStatus() {
       const res = await api.get<QueueStatus>("/tasks/queue-status");
       return res.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return (data?.pending ?? 0) > 0 || (data?.running ?? 0) > 0 ? 5000 : 30000;
+    },
   });
 }
 
@@ -83,6 +92,7 @@ export function useStabilityStats(taskId: string) {
       return res.data;
     },
     enabled: !!taskId,
+    staleTime: 10_000,
   });
 }
 

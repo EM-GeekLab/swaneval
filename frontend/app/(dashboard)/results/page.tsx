@@ -71,6 +71,7 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
 } from "recharts";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { useLeaderboard, useResults } from "@/lib/hooks/use-results";
 import { useBenchmarks, useCreateBenchmarkBatch, useDeleteBenchmark } from "@/lib/hooks/use-benchmarks";
 import { useReport, useExportReport, type ReportType } from "@/lib/hooks/use-reports";
@@ -149,7 +150,7 @@ export default function ResultsPage() {
   const [detailTaskId, setDetailTaskId] = useState<string>("");
   const [detailPage, setDetailPage] = useState(1);
 
-  const { data: leaderboard = [], isLoading: lbLoading } = useLeaderboard(
+  const { data: leaderboard = [], isLoading: lbLoading, isFetching: lbFetching } = useLeaderboard(
     criterionFilter === "__all__" ? undefined : criterionFilter,
   );
 
@@ -490,7 +491,10 @@ export default function ResultsPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">结果分析</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">结果分析</h1>
+          <RefreshIndicator isFetching={lbFetching} isLoading={lbLoading} />
+        </div>
         <Button
           size="sm"
           variant="outline"

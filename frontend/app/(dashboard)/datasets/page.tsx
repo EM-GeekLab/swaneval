@@ -53,6 +53,7 @@ import { DatasetCreateForm, type ImportFormState } from "@/components/datasets/d
 import { DatasetPreviewDialog } from "@/components/datasets/dataset-preview-dialog";
 import { getDatasetColumns } from "@/components/datasets/dataset-table-columns";
 import { ImportProgressHub } from "@/components/import-progress-hub";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { useImportJobs } from "@/lib/stores/import-jobs";
 
 const sourceTypeLabel: Record<string, string> = {
@@ -66,7 +67,7 @@ const sourceTypeLabel: Record<string, string> = {
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
 export default function DatasetsPage() {
-  const { data: datasetsData, isLoading } = useDatasets();
+  const { data: datasetsData, isLoading, isFetching } = useDatasets();
   const datasets = useMemo(
     () =>
       (datasetsData?.items ?? []).filter(
@@ -178,6 +179,7 @@ export default function DatasetsPage() {
             value: count,
           })),
         ]}
+        trailing={<RefreshIndicator isFetching={isFetching} isLoading={isLoading} />}
         action={
           <div className="flex items-center gap-2">
             <ImportProgressHub />

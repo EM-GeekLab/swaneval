@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type {
   Dataset,
@@ -19,6 +19,8 @@ export function useDatasets(tag?: string, page = 1, pageSize = 200) {
       const res = await api.get<PaginatedResponse<Dataset>>("/datasets", { params });
       return res.data;
     },
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -33,6 +35,7 @@ export function useDatasetPreview(id: string, enabled = false) {
       return res.data;
     },
     enabled,
+    staleTime: 60_000,
   });
 }
 
@@ -149,6 +152,7 @@ export function useDatasetPresets() {
       const res = await api.get<PresetDataset[]>("/datasets/presets");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 
@@ -196,6 +200,7 @@ export function useDatasetVersions(id: string) {
       return res.data;
     },
     enabled: !!id,
+    staleTime: 60_000,
   });
 }
 
@@ -208,6 +213,7 @@ export function useDatasetStats(id: string, version?: number) {
       return res.data;
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -219,6 +225,7 @@ export function useSyncLogs(id: string) {
       return res.data;
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 

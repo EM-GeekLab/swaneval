@@ -47,6 +47,7 @@ import {
 } from "@/lib/hooks/use-models";
 import type { LLMModel } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/utils";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
 import { ModelDetailPanel } from "@/components/models/model-detail-panel";
@@ -61,7 +62,7 @@ const typeLabel: Record<string, string> = {
 type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
 export default function ModelsPage() {
-  const { data: models = [], isLoading } = useModels();
+  const { data: models = [], isLoading, isFetching } = useModels();
   const deleteMut = useDeleteModel();
   const testModel = useTestModel();
 
@@ -288,6 +289,7 @@ export default function ModelsPage() {
             value: count,
           })),
         ]}
+        trailing={<RefreshIndicator isFetching={isFetching} isLoading={isLoading} />}
         action={
           <Button
             ref={addBtnRef}

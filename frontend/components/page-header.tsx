@@ -10,9 +10,11 @@ interface PageHeaderProps {
   stats?: { label: string; value: number }[];
   /** Right-side action (e.g. add button) */
   action?: React.ReactNode;
+  /** Extra element rendered after stats (e.g. refresh indicator) */
+  trailing?: React.ReactNode;
 }
 
-export function PageHeader({ title, stats, action }: PageHeaderProps) {
+export function PageHeader({ title, stats, action, trailing }: PageHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-5">
@@ -29,6 +31,7 @@ export function PageHeader({ title, stats, action }: PageHeaderProps) {
             ))}
           </div>
         )}
+        {trailing}
       </div>
       {action}
     </div>

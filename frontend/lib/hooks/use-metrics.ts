@@ -26,6 +26,7 @@ export function useDashboardMetrics() {
       const res = await api.get<DashboardMetrics>("/metrics/dashboard");
       return res.data;
     },
+    staleTime: 10_000,
     refetchInterval: 30000,
   });
 }

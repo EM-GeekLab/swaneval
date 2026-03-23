@@ -9,6 +9,7 @@ export function useCriteria() {
       const res = await api.get<Criterion[]>("/criteria");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 
@@ -30,6 +31,7 @@ export function useCriteriaPresets() {
       const res = await api.get<PresetCriterion[]>("/criteria/presets");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 
@@ -79,6 +81,7 @@ export function useJudgeTemplates() {
       const res = await api.get<JudgeTemplate[]>("/criteria/templates");
       return res.data;
     },
+    staleTime: 60_000,
   });
 }
 

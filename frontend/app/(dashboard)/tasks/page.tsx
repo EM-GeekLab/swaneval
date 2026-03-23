@@ -47,6 +47,7 @@ import { SelectionBar } from "@/components/selection-bar";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { TablePagination } from "@/components/table-pagination";
 import { TableEmpty, TableLoading } from "@/components/table-states";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { TaskCreateWizard } from "@/components/tasks/task-create-wizard";
 import { statusLabel, statusBadgeVariant, formatDuration, estimateEta } from "@/components/tasks/task-constants";
@@ -55,7 +56,7 @@ type PanelMode = { kind: "view"; id: string } | { kind: "create" } | null;
 
 export default function TasksPage() {
   const router = useRouter();
-  const { data: tasks = [], isLoading } = useTasks();
+  const { data: tasks = [], isLoading, isFetching } = useTasks();
   const deleteTask = useDeleteTask();
 
   const { data: datasetsData } = useDatasets();
@@ -193,6 +194,7 @@ export default function TasksPage() {
             value: count,
           })),
         ]}
+        trailing={<RefreshIndicator isFetching={isFetching} isLoading={isLoading} />}
         action={
           <Button
             ref={addBtnRef}
