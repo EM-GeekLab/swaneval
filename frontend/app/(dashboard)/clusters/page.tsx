@@ -496,24 +496,27 @@ export default function ClustersPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">vLLM 镜像源</Label>
-              <Select value={createVllmImage} onValueChange={setCreateVllmImage}>
+              <Select
+                value={createVllmImage || "__default__"}
+                onValueChange={(v) => setCreateVllmImage(v === "__default__" ? "" : v)}
+              >
                 <SelectTrigger className="h-9 font-mono text-xs">
                   <SelectValue placeholder="默认 (Docker Hub)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">默认 (vllm/vllm-openai:latest)</SelectItem>
+                  <SelectItem value="__default__">默认 (vllm/vllm-openai:latest)</SelectItem>
                   <SelectItem value="registry.cn-hangzhou.aliyuncs.com/modelscope-repo/vllm-openai:latest">
                     阿里云 (modelscope-repo)
                   </SelectItem>
                   <SelectItem value="swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/vllm/vllm-openai:latest">
                     华为云 (ddn-k8s)
                   </SelectItem>
-                  <SelectItem value="custom">自定义...</SelectItem>
+                  <SelectItem value="__custom__">自定义...</SelectItem>
                 </SelectContent>
               </Select>
-              {createVllmImage === "custom" && (
+              {createVllmImage === "__custom__" && (
                 <Input
-                  value=""
+                  autoFocus
                   onChange={(e) => setCreateVllmImage(e.target.value)}
                   placeholder="registry.example.com/vllm/vllm-openai:latest"
                   className="h-8 font-mono text-xs mt-1"
