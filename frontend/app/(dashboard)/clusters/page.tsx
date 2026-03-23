@@ -307,7 +307,8 @@ export default function ClustersPage() {
   const [createKubeconfig, setCreateKubeconfig] = useState("");
   const [createNamespace, setCreateNamespace] = useState("");
   const [createDescription, setCreateDescription] = useState("");
-  const [createVllmImage, setCreateVllmImage] = useState("");
+  const [createVllmImageOption, setCreateVllmImageOption] = useState("__default__");
+  const [createVllmImageCustom, setCreateVllmImageCustom] = useState("");
   const [createError, setCreateError] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -326,14 +327,19 @@ export default function ClustersPage() {
         kubeconfig: createKubeconfig,
         namespace: createNamespace || undefined,
         description: createDescription || undefined,
-        vllm_image: createVllmImage || undefined,
+        vllm_image: createVllmImageOption === "__custom__"
+          ? createVllmImageCustom || undefined
+          : createVllmImageOption === "__default__"
+            ? undefined
+            : createVllmImageOption || undefined,
       });
       setShowCreate(false);
       setCreateName("");
       setCreateKubeconfig("");
       setCreateNamespace("");
       setCreateDescription("");
-      setCreateVllmImage("");
+      setCreateVllmImageOption("__default__");
+      setCreateVllmImageCustom("");
     } catch (err: unknown) {
       setCreateError(extractErrorDetail(err, "创建失败"));
     }
@@ -496,10 +502,7 @@ export default function ClustersPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">vLLM 镜像源</Label>
-              <Select
-                value={createVllmImage || "__default__"}
-                onValueChange={(v) => setCreateVllmImage(v === "__default__" ? "" : v)}
-              >
+              <Select value={createVllmImageOption} onValueChange={setCreateVllmImageOption}>
                 <SelectTrigger className="h-9 font-mono text-xs">
                   <SelectValue placeholder="默认 (Docker Hub)" />
                 </SelectTrigger>
@@ -514,10 +517,11 @@ export default function ClustersPage() {
                   <SelectItem value="__custom__">自定义...</SelectItem>
                 </SelectContent>
               </Select>
-              {createVllmImage === "__custom__" && (
+              {createVllmImageOption === "__custom__" && (
                 <Input
                   autoFocus
-                  onChange={(e) => setCreateVllmImage(e.target.value)}
+                  value={createVllmImageCustom}
+                  onChange={(e) => setCreateVllmImageCustom(e.target.value)}
                   placeholder="registry.example.com/vllm/vllm-openai:latest"
                   className="h-8 font-mono text-xs mt-1"
                 />
