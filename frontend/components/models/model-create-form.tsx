@@ -141,17 +141,9 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                 HuggingFace 模型仓库 ID，将通过 Inference API 调用
               </p>
             </PanelField>
-            <PanelField label="HF Token">
-              <Input
-                type="password"
-                value={form.api_key}
-                onChange={(e) =>
-                  setForm({ ...form, api_key: e.target.value })
-                }
-                placeholder="hf_..."
-                className="font-mono"
-              />
-            </PanelField>
+            <p className="text-[11px] text-muted-foreground">
+              HF Token 请在<a href="/account" className="text-primary hover:underline mx-0.5">账号设置</a>中配置
+            </p>
           </>
         ) : form.model_type === "modelscope" ? (
           <>
@@ -169,17 +161,9 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
                 ModelScope 模型 ID，将通过 Inference API 调用
               </p>
             </PanelField>
-            <PanelField label="MS Token">
-              <Input
-                type="password"
-                value={form.api_key}
-                onChange={(e) =>
-                  setForm({ ...form, api_key: e.target.value })
-                }
-                placeholder="ms_..."
-                className="font-mono"
-              />
-            </PanelField>
+            <p className="text-[11px] text-muted-foreground">
+              MS Token 请在<a href="/account" className="text-primary hover:underline mx-0.5">账号设置</a>中配置
+            </p>
           </>
         ) : (
           <>
