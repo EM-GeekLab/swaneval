@@ -26,7 +26,7 @@ import {
   Send,
   X as XIcon,
 } from "lucide-react";
-import { useUpdateModel, useTestModel, usePlayground, useUndeployModel } from "@/lib/hooks/use-models";
+import { useUpdateModel, useTestModel, usePlayground, useUndeployModel, useCheckDeployHealth } from "@/lib/hooks/use-models";
 import type { LLMModel } from "@/lib/types";
 import { cn, utc } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
@@ -58,6 +58,7 @@ export function ModelDetailPanel({
   const testModel = useTestModel();
   const playground = usePlayground();
   const undeploy = useUndeployModel();
+  const checkHealth = useCheckDeployHealth();
 
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
@@ -291,26 +292,60 @@ export function ModelDetailPanel({
                       </span>
                     )}
                   </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="flex-1 text-xs h-7"
+                      onClick={() => checkHealth.mutate(model.id)}
+                      disabled={checkHealth.isPending}
+                    >
+                      {checkHealth.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      检查状态
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-7"
+                      onClick={() => undeploy.mutate(model.id)}
+                      disabled={undeploy.isPending}
+                    >
+                      {undeploy.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      停止部署
+                    </Button>
+                  </div>
+                </div>
+              ) : model.deploy_status === "deploying" ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    正在部署（首次可能需要数分钟下载模型）...
+                  </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full"
+                    className="w-full text-xs h-7 text-destructive hover:text-destructive"
                     onClick={() => undeploy.mutate(model.id)}
                     disabled={undeploy.isPending}
                   >
-                    {undeploy.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                    停止部署
+                    取消部署
                   </Button>
                 </div>
-              ) : model.deploy_status === "deploying" ? (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  正在部署...
-                </div>
               ) : model.deploy_status === "failed" || model.deploy_status === "cleanup_failed" ? (
-                <div className="flex items-center gap-1.5 text-xs text-destructive">
-                  <XIcon className="h-3 w-3" />
-                  部署失败
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs text-destructive">
+                    <XIcon className="h-3 w-3" />
+                    {model.deploy_status === "cleanup_failed" ? "清理失败" : "部署失败"}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-xs h-7"
+                    onClick={() => undeploy.mutate(model.id)}
+                    disabled={undeploy.isPending}
+                  >
+                    清理资源
+                  </Button>
                 </div>
               ) : model.deploy_status === "stopped" ? (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

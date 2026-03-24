@@ -10,6 +10,11 @@ export function useModels() {
       return res.data;
     },
     staleTime: 30_000,
+    refetchInterval: (query) => {
+      const models = query.state.data;
+      const hasDeploying = models?.some((m: LLMModel) => m.deploy_status === "deploying");
+      return hasDeploying ? 5000 : false;
+    },
   });
 }
 
@@ -118,6 +123,19 @@ export function useUndeployModel() {
   return useMutation({
     mutationFn: async (model_id: string) => {
       const res = await api.post<{ status: string }>(`/models/${model_id}/undeploy`);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
+  });
+}
+
+export function useCheckDeployHealth() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (model_id: string) => {
+      const res = await api.post<{ status: string; healthy: boolean; reason?: string }>(
+        `/models/${model_id}/check-deploy`,
+      );
       return res.data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),

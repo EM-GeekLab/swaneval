@@ -129,7 +129,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
       return;
     }
 
-    // Step 2: Deploy to cluster (if cluster selected)
+    // Step 2: Deploy to cluster (if cluster selected) — non-blocking
     if (shForm.cluster_id) {
       setDeployPhase("deploying");
       try {
@@ -139,11 +139,10 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
           gpu_count: parseInt(shForm.gpu_count) || 1,
           memory_gb: parseInt(shForm.memory_gb) || 40,
         });
+        // Deploy is background — returns immediately, model shows "deploying" in table
       } catch (err: unknown) {
-        // Model was created but deploy failed — still close, user can retry from detail panel
         setDeployPhase("");
-        setDeployError(err instanceof Error ? err.message : "部署失败（模型已注册，可稍后重试）");
-        // Don't return — model is created, let user see it
+        setDeployError(err instanceof Error ? err.message : "部署请求失败（模型已注册）");
         setTimeout(() => onSuccess(), 2000);
         return;
       }

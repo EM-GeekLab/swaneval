@@ -52,6 +52,28 @@ async def lifespan(app: FastAPI):
         if settings.S3_REGION:
             os.environ.setdefault("AWS_DEFAULT_REGION", settings.S3_REGION)
 
+    # Reset stale "deploying" models from previous crash/restart
+    try:
+        from sqlmodel import select as _sel
+        from sqlmodel.ext.asyncio.session import AsyncSession as _AS
+
+        from app.database import engine as _engine
+        from app.models.llm_model import LLMModel
+
+        async with _AS(_engine) as _s:
+            stale = (await _s.exec(
+                _sel(LLMModel).where(LLMModel.deploy_status == "deploying")
+            )).all()
+            for m in stale:
+                logger.warning("Resetting stale deploying model: %s (%s)", m.name, m.id)
+                m.deploy_status = "failed"
+                _s.add(m)
+            if stale:
+                await _s.commit()
+                logger.info("Reset %d stale deploying model(s)", len(stale))
+    except Exception as e:
+        logger.warning("Failed to reset stale models: %s", e)
+
     start_sync_loop()
 
     # Start embedded worker if configured (default for dev)

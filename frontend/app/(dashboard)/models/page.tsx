@@ -183,16 +183,33 @@ export default function ModelsPage() {
       {
         accessorKey: "name",
         header: "名称",
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <p className="font-medium truncate">{row.original.name}</p>
-            {row.original.model_name && (
-              <p className="text-xs text-muted-foreground font-mono truncate">
-                {row.original.model_name}
-              </p>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="min-w-0 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{m.name}</p>
+                {m.model_name && (
+                  <p className="text-xs text-muted-foreground font-mono truncate">
+                    {m.model_name}
+                  </p>
+                )}
+              </div>
+              {m.deploy_status === "deploying" && (
+                <Badge variant="warning" className="text-[10px] shrink-0">
+                  <Loader2 className="h-3 w-3 animate-spin mr-0.5" />
+                  部署中
+                </Badge>
+              )}
+              {m.deploy_status === "running" && (
+                <Badge variant="success" className="text-[10px] shrink-0">运行中</Badge>
+              )}
+              {m.deploy_status === "failed" && (
+                <Badge variant="destructive" className="text-[10px] shrink-0">部署失败</Badge>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "provider",
