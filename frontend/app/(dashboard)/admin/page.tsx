@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -56,13 +56,23 @@ export default function AdminPage() {
   const changePassword = useChangePassword();
 
   const searchParams = useSearchParams();
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const router = useRouter();
 
-  // Pre-select user from query param (e.g. admin clicking their own account)
+  // Persist selection in URL: /admin?user=xxx
+  const [selectedUserId, setSelectedUserIdRaw] = useState<string | null>(null);
+  const setSelectedUserId = useCallback((id: string | null) => {
+    setSelectedUserIdRaw(id);
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set("user", id);
+    else params.delete("user");
+    router.replace(`/admin${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [router]);
+
+  // Restore selection from URL on mount
   useEffect(() => {
     const userId = searchParams.get("user");
     if (userId && !selectedUserId) {
-      setSelectedUserId(userId);
+      setSelectedUserIdRaw(userId);
     }
   }, [searchParams, selectedUserId]);
   const [adminOldPw, setAdminOldPw] = useState("");

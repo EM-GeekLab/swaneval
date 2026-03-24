@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -225,13 +226,29 @@ function ClusterDetail({
           </div>
 
           {gpuStatus ? (
-            <div className="text-[11px] text-muted-foreground space-y-0.5">
-              <p>GPU 节点: {gpuStatus.gpu_node_count > 0
-                ? `${gpuStatus.gpu_node_count} 个 (${gpuStatus.gpu_nodes.slice(0, 3).join(", ")})`
-                : "无"
-              }</p>
-              <p>Device Plugin: {gpuStatus.has_device_plugin ? "✓ 运行中" : "✗ 未检测到"}</p>
-              <p>GPU Operator: {gpuStatus.has_gpu_operator ? "✓ 运行中" : "✗ 未安装"}</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>GPU 节点:</span>
+                {gpuStatus.gpu_node_count > 0 ? (
+                  <span className="font-mono">{gpuStatus.gpu_nodes.slice(0, 3).join(", ")}</span>
+                ) : (
+                  <span>无</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant={gpuStatus.has_device_plugin ? "success" : "outline"}
+                  className="text-[10px]"
+                >
+                  Device Plugin
+                </Badge>
+                <Badge
+                  variant={gpuStatus.has_gpu_operator ? "success" : "outline"}
+                  className="text-[10px]"
+                >
+                  GPU Operator
+                </Badge>
+              </div>
             </div>
           ) : (
             <p className="text-[11px] text-muted-foreground">加载 GPU 状态中...</p>
@@ -434,8 +451,26 @@ export default function ClustersPage() {
   const { data: clusters = [], isLoading, isFetching } = useClusters();
   const createCluster = useCreateCluster();
   const deleteCluster = useDeleteCluster();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Persist selection in URL: /clusters?id=xxx
+  const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
+  const setSelectedId = useCallback((id: string | null) => {
+    setSelectedIdRaw(id);
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set("id", id);
+    else params.delete("id");
+    router.replace(`/clusters${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [router]);
+
+  // Restore selection from URL on mount
+  useEffect(() => {
+    const idParam = searchParams.get("id");
+    if (idParam && !selectedId && clusters.some((c) => c.id === idParam)) {
+      setSelectedIdRaw(idParam);
+    }
+  }, [searchParams, selectedId, clusters]);
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createKubeconfig, setCreateKubeconfig] = useState("");
