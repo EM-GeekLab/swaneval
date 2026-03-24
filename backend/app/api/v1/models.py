@@ -134,6 +134,9 @@ async def test_model(
     model_name = m.model_name or m.name or settings.DEFAULT_MODEL_NAME
     endpoint_url = m.endpoint_url or settings.DEFAULT_MODEL_ENDPOINT_URL
     api_key = m.api_key or settings.DEFAULT_MODEL_API_KEY
+    # vLLM deployments don't need an API key
+    if not api_key and m.vllm_deployment_name:
+        api_key = "dummy"
     ok, message = await test_model_connectivity(
         endpoint_url=endpoint_url,
         api_key=api_key,
@@ -310,7 +313,8 @@ async def deploy_model(
     if not hf_model_id:
         raise HTTPException(400, "模型需要 source_model_id 或 model_name")
 
-    # Snapshot values before commit
+    # Snapshot ALL values before commit (commit expires ORM objects → MissingGreenlet)
+    _model_id = m.id
     _model_name = m.name
     _kubeconfig = cluster.kubeconfig_encrypted
     _namespace = cluster.namespace
@@ -325,11 +329,11 @@ async def deploy_model(
 
     # Run deployment in background — returns immediately
     background_tasks.add_task(
-        _do_deploy, m.id, hf_model_id, _model_name,
+        _do_deploy, _model_id, hf_model_id, _model_name,
         _kubeconfig, _namespace, gpu_count, _gpu_type,
         memory_gb, _hf_token, _vllm_image,
     )
-    return {"status": "deploying", "model_id": str(m.id)}
+    return {"status": "deploying", "model_id": str(_model_id)}
 
 
 @router.post("/{model_id}/undeploy")
