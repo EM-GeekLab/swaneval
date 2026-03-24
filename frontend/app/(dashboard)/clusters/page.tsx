@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,8 +40,6 @@ import {
   Trash2,
   X,
   Loader2,
-  Pencil,
-  Check,
   Copy,
   ClipboardCheck,
   ChevronDown,
@@ -50,6 +47,7 @@ import {
 import { TableEmpty, TableLoading } from "@/components/table-states";
 import { JsonImportBar } from "@/components/json-import-bar";
 import { cn } from "@/lib/utils";
+import { InlineEditField } from "@/components/panel-helpers";
 import { RefreshIndicator } from "@/components/refresh-indicator";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { formatTime } from "@/lib/time";
@@ -66,6 +64,8 @@ import {
 } from "@/lib/hooks/use-clusters";
 import { useActiveDeployments } from "@/lib/hooks/use-models";
 import type { ComputeCluster } from "@/lib/types";
+import { useUrlSelection } from "@/lib/hooks/use-url-selection";
+import { DEPLOY_STATUS } from "@/lib/constants";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 4) return (bytes / 1024 ** 4).toFixed(1) + " TiB";
@@ -124,33 +124,15 @@ function ClusterDetail({
   const deployments = allDeployments.filter((m) => m.cluster_id === cluster.id);
   const updateCluster = useUpdateCluster();
   const [probeError, setProbeError] = useState("");
-  const [editField, setEditField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const startEdit = (field: string, value: string) => {
-    setEditField(field);
-    setEditValue(value);
-  };
-
-  const saveEdit = async () => {
-    if (!editField) return;
-    try {
-      await updateCluster.mutateAsync({ id: cluster.id, [editField]: editValue });
-      refreshAll();
-    } catch { /* toast on error */ }
-    setEditField(null);
-  };
-
-  const cancelEdit = () => { setEditField(null); setEditValue(""); };
-
-  const refreshAll = () => {
+  const refreshAll = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["clusters"] });
     qc.invalidateQueries({ queryKey: ["clusters", cluster.id] });
     qc.invalidateQueries({ queryKey: ["clusters", cluster.id, "nodes"] });
     qc.invalidateQueries({ queryKey: ["clusters", cluster.id, "gpu-status"] });
-  };
+  }, [qc, cluster.id]);
 
   // Poll while probing — stop when status changes away from "connecting"
   useEffect(() => {
@@ -161,8 +143,7 @@ function ClusterDetail({
     }
     const timer = setInterval(refreshAll, 2000);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProbing, cluster.status]);
+  }, [isProbing, cluster.status, refreshAll]);
 
   const handleProbe = async () => {
     setProbeError("");
@@ -218,33 +199,26 @@ function ClusterDetail({
         {/* Editable info fields */}
         <div className="space-y-2.5 mb-6 text-xs">
           {/* Name — editable */}
-          <EditableField
-            label="名称" field="name" value={cluster.name}
-            editField={editField} editValue={editValue}
-            onStart={startEdit} onSave={saveEdit} onCancel={cancelEdit}
-            onChange={setEditValue} saving={updateCluster.isPending}
+          <InlineEditField
+            label="名称" value={cluster.name}
+            onSave={(v) => updateCluster.mutateAsync({ id: cluster.id, name: v }).then(() => refreshAll())}
           />
           {/* Description — editable */}
-          <EditableField
-            label="描述" field="description" value={cluster.description || ""}
-            editField={editField} editValue={editValue}
-            onStart={startEdit} onSave={saveEdit} onCancel={cancelEdit}
-            onChange={setEditValue} saving={updateCluster.isPending}
+          <InlineEditField
+            label="描述" value={cluster.description || ""}
+            onSave={(v) => updateCluster.mutateAsync({ id: cluster.id, description: v }).then(() => refreshAll())}
             placeholder="添加描述..."
           />
           {/* Namespace — editable */}
-          <EditableField
-            label="命名空间" field="namespace" value={cluster.namespace || "default"}
-            editField={editField} editValue={editValue}
-            onStart={startEdit} onSave={saveEdit} onCancel={cancelEdit}
-            onChange={setEditValue} saving={updateCluster.isPending} mono
+          <InlineEditField
+            label="命名空间" value={cluster.namespace || "default"}
+            onSave={(v) => updateCluster.mutateAsync({ id: cluster.id, namespace: v }).then(() => refreshAll())}
+            mono
           />
           {/* vLLM image — editable */}
-          <EditableField
-            label="vLLM 镜像" field="vllm_image" value={cluster.vllm_image || ""}
-            editField={editField} editValue={editValue}
-            onStart={startEdit} onSave={saveEdit} onCancel={cancelEdit}
-            onChange={setEditValue} saving={updateCluster.isPending}
+          <InlineEditField
+            label="vLLM 镜像" value={cluster.vllm_image || ""}
+            onSave={(v) => updateCluster.mutateAsync({ id: cluster.id, vllm_image: v }).then(() => refreshAll())}
             mono placeholder="默认 (vllm/vllm-openai:latest)"
           />
           {/* API Server — read-only */}
@@ -483,10 +457,10 @@ function ClusterDetail({
                     )}
                   </div>
                   <Badge
-                    variant={m.deploy_status === "running" ? "success" : "warning"}
+                    variant={m.deploy_status === DEPLOY_STATUS.RUNNING ? "success" : "warning"}
                     className="text-[10px] shrink-0 ml-2"
                   >
-                    {m.deploy_status === "running" ? "运行中" : "部署中"}
+                    {m.deploy_status === DEPLOY_STATUS.RUNNING ? "运行中" : "部署中"}
                   </Badge>
                 </div>
               ))}
@@ -532,81 +506,12 @@ function ClusterDetail({
 
 
 
-/** Inline editable field for cluster detail panel. */
-function EditableField({
-  label, field, value, editField, editValue,
-  onStart, onSave, onCancel, onChange, saving,
-  mono, placeholder,
-}: {
-  label: string; field: string; value: string;
-  editField: string | null; editValue: string;
-  onStart: (field: string, value: string) => void;
-  onSave: () => void; onCancel: () => void;
-  onChange: (v: string) => void; saving: boolean;
-  mono?: boolean; placeholder?: string;
-}) {
-  const isEditing = editField === field;
-  return (
-    <div>
-      <dt className="text-muted-foreground mb-0.5">{label}</dt>
-      {isEditing ? (
-        <div className="flex items-center gap-1">
-          <Input
-            autoFocus
-            value={editValue}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancel(); }}
-            className={cn("h-7 text-xs", mono && "font-mono")}
-            placeholder={placeholder}
-          />
-          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onSave} disabled={saving}>
-            <Check className="h-3 w-3" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onCancel}>
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      ) : (
-        <dd
-          className={cn(
-            "group flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors",
-            mono ? "font-mono text-[11px]" : "",
-            !value && "text-muted-foreground/50 italic",
-          )}
-          onClick={() => onStart(field, value)}
-        >
-          <span className="break-all">{value || placeholder || "未设置"}</span>
-          <Pencil className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors shrink-0" />
-        </dd>
-      )}
-    </div>
-  );
-}
-
 export default function ClustersPage() {
   const { data: clusters = [], isLoading, isFetching } = useClusters();
   const createCluster = useCreateCluster();
   const deleteCluster = useDeleteCluster();
-  const router = useRouter();
-  const searchParams = useSearchParams();
 
-  // Persist selection in URL: /clusters?id=xxx
-  const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
-  const setSelectedId = useCallback((id: string | null) => {
-    setSelectedIdRaw(id);
-    const params = new URLSearchParams(window.location.search);
-    if (id) params.set("id", id);
-    else params.delete("id");
-    router.replace(`/clusters${params.toString() ? `?${params}` : ""}`, { scroll: false });
-  }, [router]);
-
-  // Restore selection from URL on mount
-  useEffect(() => {
-    const idParam = searchParams.get("id");
-    if (idParam && !selectedId && clusters.some((c) => c.id === idParam)) {
-      setSelectedIdRaw(idParam);
-    }
-  }, [searchParams, selectedId, clusters]);
+  const [selectedId, setSelectedId] = useUrlSelection("id", clusters.map(c => c.id));
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createKubeconfig, setCreateKubeconfig] = useState("");

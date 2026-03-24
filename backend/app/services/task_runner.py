@@ -308,9 +308,12 @@ async def _call_model(
     """
     headers = {}
     api_key = model.api_key or settings.DEFAULT_MODEL_API_KEY
-    # vLLM internal endpoints don't need auth
-    is_internal = (model.endpoint_url or "").startswith("http://vllm-")
-    if not api_key and not is_internal:
+    # vLLM deployments managed by SwanEVAL don't need auth
+    is_vllm_deploy = bool(
+        getattr(model, "deploy_status", "") in ("running", "deploying")
+        and getattr(model, "vllm_deployment_name", "")
+    )
+    if not api_key and not is_vllm_deploy:
         raise ConfigError(
             "Missing api_key: set model.api_key or DEFAULT_MODEL_API_KEY"
         )

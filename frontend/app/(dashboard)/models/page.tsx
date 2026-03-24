@@ -47,6 +47,7 @@ import {
 } from "@/lib/hooks/use-models";
 import type { LLMModel } from "@/lib/types";
 import { extractErrorDetail } from "@/lib/utils";
+import { DEPLOY_STATUS } from "@/lib/constants";
 import { RefreshIndicator } from "@/components/refresh-indicator";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
@@ -195,16 +196,16 @@ export default function ModelsPage() {
                   </p>
                 )}
               </div>
-              {m.deploy_status === "deploying" && (
+              {m.deploy_status === DEPLOY_STATUS.DEPLOYING && (
                 <Badge variant="warning" className="text-[10px] shrink-0">
                   <Loader2 className="h-3 w-3 animate-spin mr-0.5" />
                   部署中
                 </Badge>
               )}
-              {m.deploy_status === "running" && (
+              {m.deploy_status === DEPLOY_STATUS.RUNNING && (
                 <Badge variant="success" className="text-[10px] shrink-0">运行中</Badge>
               )}
-              {m.deploy_status === "failed" && (
+              {m.deploy_status === DEPLOY_STATUS.FAILED && (
                 <Badge variant="destructive" className="text-[10px] shrink-0">部署失败</Badge>
               )}
             </div>

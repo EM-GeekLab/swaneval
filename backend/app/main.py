@@ -74,6 +74,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to reset stale models: %s", e)
 
+    # Reset stale "running" tasks from previous crash
+    try:
+        from app.models.eval_task import EvalTask, TaskStatus
+
+        async with _AS(_engine) as _s:
+            stale_tasks = (await _s.exec(
+                _sel(EvalTask).where(EvalTask.status == TaskStatus.running)
+            )).all()
+            for t in stale_tasks:
+                logger.warning("Resetting stale running task: %s (%s)", t.name, t.id)
+                t.status = TaskStatus.failed
+                _s.add(t)
+            if stale_tasks:
+                await _s.commit()
+                logger.info("Reset %d stale running task(s)", len(stale_tasks))
+    except Exception as e:
+        logger.warning("Failed to reset stale tasks: %s", e)
+
     start_sync_loop()
 
     # Start embedded worker if configured (default for dev)

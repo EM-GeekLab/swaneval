@@ -10,7 +10,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_db, require_permission
 from app.config import settings
-from app.database import get_session
 from app.models.llm_model import LLMModel
 from app.models.user import User
 from app.schemas.model import (
@@ -210,65 +209,47 @@ async def _do_deploy(
     hf_token: str,
     vllm_image: str,
 ) -> None:
-    """Background task: deploy vLLM and update model record.
-
-    Handles cancellation (SIGINT) gracefully by cleaning up K8s resources.
-    """
+    """Background task: deploy vLLM and update model record."""
     import asyncio as _asyncio
 
+    from sqlmodel.ext.asyncio.session import AsyncSession
+
+    from app.database import engine
     from app.services.k8s_vllm import cleanup_vllm, full_vllm_lifecycle
 
     dep_name: str | None = None
     try:
-        async for session in get_session():
+        # Deploy (no DB session held during K8s operations)
+        endpoint, dep_name = await full_vllm_lifecycle(
+            kubeconfig_encrypted=kubeconfig,
+            namespace=namespace,
+            model_name=model_name,
+            hf_model_id=hf_model_id,
+            gpu_count=gpu_count,
+            gpu_type=gpu_type,
+            memory_gb=memory_gb,
+            hf_token=hf_token,
+            image=vllm_image,
+        )
+        # Success — open session only to save result
+        async with AsyncSession(engine) as session:
             m = await session.get(LLMModel, model_id)
-            if not m:
-                return
-            try:
-                endpoint, dep_name = await full_vllm_lifecycle(
-                    kubeconfig_encrypted=kubeconfig,
-                    namespace=namespace,
-                    model_name=model_name,
-                    hf_model_id=hf_model_id,
-                    gpu_count=gpu_count,
-                    gpu_type=gpu_type,
-                    memory_gb=memory_gb,
-                    hf_token=hf_token,
-                    image=vllm_image,
-                )
+            if m:
                 m.endpoint_url = endpoint
                 m.deploy_status = "running"
                 m.vllm_deployment_name = dep_name
                 session.add(m)
                 await session.commit()
                 logger.info("Deploy succeeded for model %s: %s", model_id, endpoint)
-            except Exception as e:
-                logger.error("Deploy failed for model %s: %s", model_id, e)
-                await session.rollback()
-                m = await session.get(LLMModel, model_id)
-                if m:
-                    m.deploy_status = "failed"
-                    session.add(m)
-                    await session.commit()
-                # Clean up partial K8s deployment
-                if dep_name:
-                    try:
-                        await cleanup_vllm(kubeconfig, namespace, dep_name)
-                        logger.info("Cleaned up partial deployment %s", dep_name)
-                    except Exception:
-                        logger.warning("Failed to clean up %s", dep_name, exc_info=True)
     except (_asyncio.CancelledError, KeyboardInterrupt):
-        # SIGINT or task cancellation — clean up K8s resources
         logger.warning("Deploy cancelled for model %s, cleaning up...", model_id)
         if dep_name:
             try:
                 await cleanup_vllm(kubeconfig, namespace, dep_name)
-                logger.info("Cleaned up cancelled deployment %s", dep_name)
             except Exception:
-                logger.warning("Failed to clean up %s on cancel", dep_name, exc_info=True)
-        # Mark model as failed
+                logger.warning("Cleanup failed on cancel", exc_info=True)
         try:
-            async for session in get_session():
+            async with AsyncSession(engine) as session:
                 m = await session.get(LLMModel, model_id)
                 if m and m.deploy_status == "deploying":
                     m.deploy_status = "failed"
@@ -277,7 +258,24 @@ async def _do_deploy(
                     session.add(m)
                     await session.commit()
         except Exception:
-            pass
+            logger.error("Failed to mark model as failed after cancel", exc_info=True)
+    except Exception as e:
+        logger.error("Deploy failed for model %s: %s", model_id, e)
+        # Clean up partial K8s deployment
+        if dep_name:
+            try:
+                await cleanup_vllm(kubeconfig, namespace, dep_name)
+            except Exception:
+                logger.warning("Cleanup failed", exc_info=True)
+        try:
+            async with AsyncSession(engine) as session:
+                m = await session.get(LLMModel, model_id)
+                if m:
+                    m.deploy_status = "failed"
+                    session.add(m)
+                    await session.commit()
+        except Exception:
+            logger.error("Failed to mark model as failed", exc_info=True)
 
 
 @router.post("/{model_id}/deploy")
@@ -429,13 +427,17 @@ async def check_deploy_health(
             cluster.kubeconfig_encrypted, cluster.namespace, m.vllm_deployment_name,
         )
     except Exception as e:
-        # Deployment not found — pod was deleted
-        m.deploy_status = "failed"
-        m.endpoint_url = ""
-        m.vllm_deployment_name = ""
-        session.add(m)
-        await session.commit()
-        return {"status": "failed", "healthy": False, "reason": f"deployment gone: {e}"}
+        err_str = str(e).lower()
+        # Only mark as failed if the deployment is truly gone (404), not on transient errors
+        if "not found" in err_str or "404" in err_str:
+            m.deploy_status = "failed"
+            m.endpoint_url = ""
+            m.vllm_deployment_name = ""
+            session.add(m)
+            await session.commit()
+            return {"status": "failed", "healthy": False, "reason": f"部署已不存在: {e}"}
+        # Transient error — don't change model status
+        return {"status": m.deploy_status, "healthy": False, "reason": f"无法连接集群: {e}"}
 
     if dep_status["available"]:
         return {"status": "running", "healthy": True}

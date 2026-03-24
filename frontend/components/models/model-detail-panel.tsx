@@ -30,6 +30,7 @@ import { useUpdateModel, useTestModel, usePlayground, useUndeployModel, useCheck
 import type { LLMModel } from "@/lib/types";
 import { cn, utc } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
+import { DEPLOY_STATUS } from "@/lib/constants";
 
 const typeLabel: Record<string, string> = {
   api: "API",
@@ -278,10 +279,10 @@ export function ModelDetailPanel({
           </div>
 
           {/* Deploy status — for self-hosted models */}
-          {model.deploy_status && model.deploy_status !== "" && (
+          {model.deploy_status && model.deploy_status !== DEPLOY_STATUS.NONE && (
             <div className="border-t pt-3 mt-3 space-y-2">
               <p className="text-xs font-medium text-muted-foreground">集群部署状态</p>
-              {model.deploy_status === "running" ? (
+              {model.deploy_status === DEPLOY_STATUS.RUNNING ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs">
                     <div className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -315,7 +316,7 @@ export function ModelDetailPanel({
                     </Button>
                   </div>
                 </div>
-              ) : model.deploy_status === "deploying" ? (
+              ) : model.deploy_status === DEPLOY_STATUS.DEPLOYING ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -331,11 +332,11 @@ export function ModelDetailPanel({
                     取消部署
                   </Button>
                 </div>
-              ) : model.deploy_status === "failed" || model.deploy_status === "cleanup_failed" ? (
+              ) : model.deploy_status === DEPLOY_STATUS.FAILED || model.deploy_status === DEPLOY_STATUS.CLEANUP_FAILED ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs text-destructive">
                     <XIcon className="h-3 w-3" />
-                    {model.deploy_status === "cleanup_failed" ? "清理失败" : "部署失败"}
+                    {model.deploy_status === DEPLOY_STATUS.CLEANUP_FAILED ? "清理失败" : "部署失败"}
                   </div>
                   <Button
                     size="sm"
@@ -347,7 +348,7 @@ export function ModelDetailPanel({
                     清理资源
                   </Button>
                 </div>
-              ) : model.deploy_status === "stopped" ? (
+              ) : model.deploy_status === DEPLOY_STATUS.STOPPED ? (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
                   已停止

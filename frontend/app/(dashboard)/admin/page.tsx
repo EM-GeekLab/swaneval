@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +30,7 @@ import { DeleteDialog } from "@/components/delete-dialog";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { utc } from "@/lib/utils";
 import type { User } from "@/lib/types";
+import { useUrlSelection } from "@/lib/hooks/use-url-selection";
 
 const roleLabel: Record<string, string> = {
   admin: "管理员",
@@ -55,26 +55,7 @@ export default function AdminPage() {
   const deleteUser = useDeleteUser();
   const changePassword = useChangePassword();
 
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  // Persist selection in URL: /admin?user=xxx
-  const [selectedUserId, setSelectedUserIdRaw] = useState<string | null>(null);
-  const setSelectedUserId = useCallback((id: string | null) => {
-    setSelectedUserIdRaw(id);
-    const params = new URLSearchParams(window.location.search);
-    if (id) params.set("user", id);
-    else params.delete("user");
-    router.replace(`/admin${params.toString() ? `?${params}` : ""}`, { scroll: false });
-  }, [router]);
-
-  // Restore selection from URL on mount
-  useEffect(() => {
-    const userId = searchParams.get("user");
-    if (userId && !selectedUserId) {
-      setSelectedUserIdRaw(userId);
-    }
-  }, [searchParams, selectedUserId]);
+  const [selectedUserId, setSelectedUserId] = useUrlSelection("user");
   const [adminOldPw, setAdminOldPw] = useState("");
   const [adminNewPw, setAdminNewPw] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
