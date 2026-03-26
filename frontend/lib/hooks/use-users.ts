@@ -35,6 +35,22 @@ export function useChangePassword() {
   });
 }
 
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      username: string;
+      email: string;
+      password: string;
+      role?: string;
+    }) => {
+      const res = await api.post<User>("/users", data);
+      return res.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({

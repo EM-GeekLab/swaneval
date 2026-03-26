@@ -9,8 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import AdminUpdateUserRequest, UserResponse
-from app.services.auth import hash_password  # noqa: F401
+from app.schemas.auth import AdminUpdateUserRequest, RegisterRequest, UserResponse
+from app.services.auth import hash_password
 
 router = APIRouter()
 
@@ -19,6 +19,36 @@ def _require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin only")
     return current_user
+
+
+@router.post("", response_model=UserResponse, status_code=201)
+async def create_user(
+    body: RegisterRequest,
+    session: AsyncSession = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Admin creates a new user with any role."""
+    existing = await session.exec(
+        select(User).where(
+            (User.username == body.username) | (User.email == body.email)
+        )
+    )
+    if existing.first():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "用户名或邮箱已存在",
+        )
+
+    user = User(
+        username=body.username,
+        email=body.email,
+        hashed_password=hash_password(body.password),
+        role=body.role,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return UserResponse.from_user(user)
 
 
 @router.get("", response_model=list[UserResponse])

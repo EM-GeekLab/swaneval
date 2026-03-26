@@ -19,14 +19,23 @@ import {
   ShieldOff,
   Users,
   X,
+  Plus,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { TableEmpty, TableLoading } from "@/components/table-states";
 import { extractErrorDetail } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
-import { useUsers, useUpdateUser, useDeleteUser, useChangePassword, useUpdateUserTokens } from "@/lib/hooks/use-users";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useChangePassword, useUpdateUserTokens } from "@/lib/hooks/use-users";
 import { DeleteDialog } from "@/components/delete-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { utc } from "@/lib/utils";
 import type { User } from "@/lib/types";
@@ -51,9 +60,16 @@ const roleBadgeVariant: Record<
 
 export default function AdminPage() {
   const { data: users = [], isLoading } = useUsers();
+  const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
   const changePassword = useChangePassword();
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState("engineer");
+  const [createUserError, setCreateUserError] = useState("");
 
   const [selectedUserId, setSelectedUserId] = useUrlSelection("user");
   const [adminOldPw, setAdminOldPw] = useState("");
@@ -86,7 +102,7 @@ export default function AdminPage() {
   };
 
   const handleToggleActive = async (user: User) => {
-    if (user.role === "admin") return;
+    if (user.username === "admin") return;
     await updateUser.mutateAsync({
       id: user.id,
       is_active: !user.is_active,
@@ -94,7 +110,7 @@ export default function AdminPage() {
   };
 
   const handleRoleChange = async (user: User, newRole: string) => {
-    if (user.role === "admin") return;
+    if (user.username === "admin") return;
     await updateUser.mutateAsync({
       id: user.id,
       role: newRole,
@@ -149,6 +165,10 @@ export default function AdminPage() {
                 </span>{" "}
                 个用户
               </span>
+              <Button size="sm" onClick={() => setShowCreateUser(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                添加用户
+              </Button>
             </div>
           </div>
 
@@ -305,7 +325,7 @@ export default function AdminPage() {
                 {/* API Tokens section */}
                 <div className="pt-4 border-t space-y-2.5">
                   <p className="text-xs font-medium text-muted-foreground">API 令牌</p>
-                  {selectedUser.role === "admin" ? (
+                  {selectedUser.username === "admin" ? (
                     <>
                       {[
                         { label: "HuggingFace", value: adminHfToken, set: setAdminHfToken, key: "hf_token" as const, masked: selectedUser.hf_token_masked },
@@ -345,7 +365,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Actions */}
-                {selectedUser.role === "admin" ? (
+                {selectedUser.username === "admin" ? (
                   <div className="pt-4 border-t space-y-3">
                     <p className="text-xs font-medium text-foreground/60">修改密码</p>
                     <div className="space-y-2">
@@ -392,11 +412,13 @@ export default function AdminPage() {
                         onValueChange={(v) =>
                           handleRoleChange(selectedUser, v)
                         }
+                        disabled={selectedUser.username === "admin"}
                       >
                         <SelectTrigger className="h-9 w-[200px] text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="admin">管理员</SelectItem>
                           <SelectItem value="data_admin">
                             数据管理员
                           </SelectItem>
@@ -451,6 +473,65 @@ export default function AdminPage() {
           </Card>
         )}
       </div>
+
+      {/* Create user dialog */}
+      <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>添加用户</DialogTitle>
+            <DialogDescription>创建一个新的平台用户</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">用户名<span className="text-destructive ml-0.5">*</span></Label>
+              <Input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="username" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">邮箱<span className="text-destructive ml-0.5">*</span></Label>
+              <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="user@example.com" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">密码<span className="text-destructive ml-0.5">*</span></Label>
+              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="至少 6 个字符" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">角色</Label>
+              <Select value={newRole} onValueChange={setNewRole}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">管理员</SelectItem>
+                  <SelectItem value="data_admin">数据管理员</SelectItem>
+                  <SelectItem value="engineer">工程师</SelectItem>
+                  <SelectItem value="viewer">观察者</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {createUserError && <p className="text-sm text-destructive">{createUserError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateUser(false)}>取消</Button>
+            <Button
+              disabled={createUser.isPending || !newUsername || !newEmail || !newPassword}
+              onClick={async () => {
+                setCreateUserError("");
+                try {
+                  await createUser.mutateAsync({
+                    username: newUsername, email: newEmail,
+                    password: newPassword, role: newRole,
+                  });
+                  setShowCreateUser(false);
+                  setNewUsername(""); setNewEmail(""); setNewPassword(""); setNewRole("engineer");
+                } catch (err: unknown) {
+                  setCreateUserError(extractErrorDetail(err, "创建失败"));
+                }
+              }}
+            >
+              {createUser.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <DeleteDialog
