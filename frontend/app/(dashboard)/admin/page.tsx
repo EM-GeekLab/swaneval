@@ -27,7 +27,7 @@ import { TableEmpty, TableLoading } from "@/components/table-states";
 import { extractErrorDetail } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useChangePassword, useUpdateUserTokens } from "@/lib/hooks/use-users";
-import { useRoleConfigs } from "@/lib/hooks/use-permissions";
+import { useRoleConfigs, usePermissionGroups, useCreatePermissionGroup, useDeletePermissionGroup } from "@/lib/hooks/use-permissions";
 import { DeleteDialog } from "@/components/delete-dialog";
 import {
   Dialog,
@@ -84,7 +84,15 @@ const roleBadgeVariant: Record<
 export default function AdminPage() {
   const { data: users = [], isLoading } = useUsers();
   const { data: roleConfigs = [] } = useRoleConfigs();
+  const { data: permGroups = [] } = usePermissionGroups();
+  const createGroup = useCreatePermissionGroup();
+  const deleteGroup = useDeletePermissionGroup();
   const [showRoles, setShowRoles] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupDesc, setNewGroupDesc] = useState("");
+  const [newGroupPerms, setNewGroupPerms] = useState<Set<string>>(new Set());
+  const [createGroupError, setCreateGroupError] = useState("");
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -576,40 +584,29 @@ export default function AdminPage() {
         }}
       />
 
-      {/* Role configuration dialog */}
+      {/* Role & permission group configuration dialog */}
       <Dialog open={showRoles} onOpenChange={setShowRoles}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>角色配置</DialogTitle>
-            <DialogDescription>查看和管理系统角色的权限配置</DialogDescription>
+            <DialogTitle>角色与权限配置</DialogTitle>
+            <DialogDescription>查看预设角色权限，创建和管理自定义权限组</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+
+          {/* Preset roles */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">预设角色</h3>
             {roleConfigs.map((role) => (
-              <div key={role.name} className="rounded-md border p-4 space-y-2">
+              <div key={role.name} className="rounded-md border p-3 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{role.label}</span>
-                  <Badge
-                    variant={role.name === "admin" ? "default" : "outline"}
-                    className="text-[10px]"
-                  >
+                  <span className="text-sm font-medium">{role.label}</span>
+                  <Badge variant={role.name === "admin" ? "default" : "outline"} className="text-[10px]">
                     {role.name}
                   </Badge>
-                  {role.is_preset && (
-                    <span className="text-[10px] text-muted-foreground">
-                      预设角色
-                    </span>
-                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {role.description}
-                </p>
+                <p className="text-[11px] text-muted-foreground">{role.description}</p>
                 <div className="flex flex-wrap gap-1">
                   {role.permissions.map((p) => (
-                    <Badge
-                      key={p}
-                      variant="secondary"
-                      className="text-[10px] font-mono"
-                    >
+                    <Badge key={p} variant="secondary" className="text-[10px]">
                       {permLabel[p] || p}
                     </Badge>
                   ))}
@@ -617,6 +614,124 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+
+          {/* Custom permission groups */}
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">自定义权限组</h3>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowCreateGroup(true)}>
+                <Plus className="h-3 w-3 mr-1" />
+                新建权限组
+              </Button>
+            </div>
+            {permGroups.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">
+                暂无自定义权限组。权限组可赋予用户超出其角色默认权限的额外能力。
+              </p>
+            ) : (
+              permGroups.map((g) => (
+                <div key={g.id} className="rounded-md border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{g.name}</span>
+                      {g.is_system && (
+                        <Badge variant="outline" className="text-[10px]">系统</Badge>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        {g.member_count} 位成员
+                      </span>
+                    </div>
+                    {!g.is_system && (
+                      <Button
+                        size="icon" variant="ghost"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteGroup.mutate(g.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  {g.description && (
+                    <p className="text-[11px] text-muted-foreground">{g.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {(Array.isArray(g.permissions) ? g.permissions : []).map((p: string) => (
+                      <Badge key={p} variant="secondary" className="text-[10px]">
+                        {permLabel[p] || p}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create permission group dialog */}
+      <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>新建权限组</DialogTitle>
+            <DialogDescription>创建自定义权限组并选择包含的权限</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">权限组名称<span className="text-destructive ml-0.5">*</span></Label>
+              <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="例：高级工程师" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">描述</Label>
+              <Input value={newGroupDesc} onChange={e => setNewGroupDesc(e.target.value)} placeholder="可选描述" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">选择权限</Label>
+              <div className="rounded-md border p-3 grid grid-cols-2 gap-1.5">
+                {Object.entries(permLabel).map(([perm, label]) => (
+                  <label key={perm} className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:text-foreground transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={newGroupPerms.has(perm)}
+                      onChange={(e) => {
+                        const next = new Set(newGroupPerms);
+                        if (e.target.checked) next.add(perm); else next.delete(perm);
+                        setNewGroupPerms(next);
+                      }}
+                      className="rounded"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                已选 {newGroupPerms.size} 项权限
+              </p>
+            </div>
+            {createGroupError && <p className="text-sm text-destructive">{createGroupError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateGroup(false)}>取消</Button>
+            <Button
+              disabled={createGroup.isPending || !newGroupName || newGroupPerms.size === 0}
+              onClick={async () => {
+                setCreateGroupError("");
+                try {
+                  await createGroup.mutateAsync({
+                    name: newGroupName,
+                    description: newGroupDesc || undefined,
+                    permissions: Array.from(newGroupPerms),
+                  });
+                  setShowCreateGroup(false);
+                  setNewGroupName(""); setNewGroupDesc(""); setNewGroupPerms(new Set());
+                } catch (err: unknown) {
+                  setCreateGroupError(extractErrorDetail(err, "创建失败"));
+                }
+              }}
+            >
+              {createGroup.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              创建
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
