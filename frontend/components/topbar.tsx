@@ -120,7 +120,10 @@ export function Topbar() {
           {visibleAdmin.length > 0 && (
             <div className="flex items-center gap-0.5">
               {visibleAdmin.map((item) => {
-                const active = pathname.startsWith(item.href);
+                // Exact match for /admin (don't highlight on /admin/permissions)
+                const active = item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}

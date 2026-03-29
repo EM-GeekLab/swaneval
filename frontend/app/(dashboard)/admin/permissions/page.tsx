@@ -10,31 +10,65 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Loader2 } from "lucide-react";
-import { useRoleConfigs, usePermissionGroups, useCreatePermissionGroup, useDeletePermissionGroup } from "@/lib/hooks/use-permissions";
+import { Plus, Trash2, Loader2, ShieldCheck, X } from "lucide-react";
+import {
+  useRoleConfigs,
+  usePermissionGroups,
+  useCreatePermissionGroup,
+  useDeletePermissionGroup,
+  type RoleConfig,
+} from "@/lib/hooks/use-permissions";
 import { extractErrorDetail } from "@/lib/utils";
+import { TableEmpty } from "@/components/table-states";
+import { DeleteDialog } from "@/components/delete-dialog";
+import type { PermissionGroup } from "@/lib/types";
 
-const permLabel: Record<string, string> = {
-  "datasets.read": "数据集 · 查看",
-  "datasets.write": "数据集 · 编辑",
-  "datasets.download": "数据集 · 下载",
-  "models.read": "模型 · 查看",
-  "models.write": "模型 · 编辑",
-  "criteria.read": "标准 · 查看",
-  "criteria.write": "标准 · 编辑",
-  "tasks.read": "任务 · 查看",
-  "tasks.create": "任务 · 创建",
-  "tasks.manage": "任务 · 管理",
-  "results.read": "结果 · 查看",
-  "reports.read": "报告 · 查看",
-  "reports.generate": "报告 · 生成",
-  "reports.export": "报告 · 导出",
-  "clusters.read": "集群 · 查看",
-  "clusters.manage": "集群 · 管理",
-  "admin.users": "管理 · 用户",
-  "admin.groups": "管理 · 权限组",
-  "admin.acl": "管理 · ACL",
+// Permission display config: label + color class for the action type
+const permInfo: Record<string, { label: string; action: string; color: string; hint?: string }> = {
+  "datasets.read":     { label: "数据集", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "datasets.write":    { label: "数据集", action: "编辑", color: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  "datasets.download": { label: "数据集", action: "下载", color: "bg-sky-500/15 text-sky-700 dark:text-sky-400" },
+  "models.read":       { label: "模型", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "models.write":      { label: "模型", action: "编辑", color: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  "criteria.read":     { label: "评测标准", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "criteria.write":    { label: "评测标准", action: "编辑", color: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  "tasks.read":        { label: "评测任务", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "tasks.create":      { label: "评测任务", action: "创建", color: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  "tasks.manage":      { label: "评测任务", action: "管理", color: "bg-rose-500/15 text-rose-700 dark:text-rose-400", hint: "暂停、恢复、取消、重启、删除" },
+  "results.read":      { label: "评测结果", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "reports.read":      { label: "评测报告", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "reports.generate":  { label: "评测报告", action: "生成", color: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  "reports.export":    { label: "评测报告", action: "导出", color: "bg-sky-500/15 text-sky-700 dark:text-sky-400", hint: "PDF、HTML、DOCX、CSV" },
+  "clusters.read":     { label: "计算资源", action: "查看", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  "clusters.manage":   { label: "计算资源", action: "管理", color: "bg-rose-500/15 text-rose-700 dark:text-rose-400", hint: "添加、删除、探测集群" },
+  "admin.users":       { label: "系统管理", action: "用户管理", color: "bg-rose-500/15 text-rose-700 dark:text-rose-400", hint: "创建、修改、删除用户" },
+  "admin.groups":      { label: "系统管理", action: "权限组管理", color: "bg-rose-500/15 text-rose-700 dark:text-rose-400", hint: "创建、修改、删除权限组" },
+  "admin.acl":         { label: "系统管理", action: "访问控制", color: "bg-rose-500/15 text-rose-700 dark:text-rose-400", hint: "资源级 ACL 访问控制列表" },
 };
+
+// Grouped by module
+const permModules: { label: string; perms: string[] }[] = [
+  { label: "数据集", perms: ["datasets.read", "datasets.write", "datasets.download"] },
+  { label: "模型", perms: ["models.read", "models.write"] },
+  { label: "评测标准", perms: ["criteria.read", "criteria.write"] },
+  { label: "评测任务", perms: ["tasks.read", "tasks.create", "tasks.manage"] },
+  { label: "结果与报告", perms: ["results.read", "reports.read", "reports.generate", "reports.export"] },
+  { label: "计算资源", perms: ["clusters.read", "clusters.manage"] },
+  { label: "系统管理", perms: ["admin.users", "admin.groups", "admin.acl"] },
+];
+
+/** Color legend for action types */
+const actionColors: { action: string; color: string; desc: string }[] = [
+  { action: "查看", color: "bg-emerald-500/15 text-emerald-700", desc: "只读访问" },
+  { action: "下载/导出", color: "bg-sky-500/15 text-sky-700", desc: "下载或导出数据" },
+  { action: "创建/生成", color: "bg-violet-500/15 text-violet-700", desc: "创建新资源" },
+  { action: "编辑", color: "bg-amber-500/15 text-amber-700", desc: "修改已有资源" },
+  { action: "管理", color: "bg-rose-500/15 text-rose-700", desc: "完全控制（增删改查）" },
+];
+
+type SelectedItem =
+  | { type: "role"; data: RoleConfig }
+  | { type: "group"; data: PermissionGroup };
 
 export default function PermissionsPage() {
   const { data: roleConfigs = [] } = useRoleConfigs();
@@ -42,11 +76,13 @@ export default function PermissionsPage() {
   const createGroup = useCreatePermissionGroup();
   const deleteGroup = useDeletePermissionGroup();
 
+  const [selected, setSelected] = useState<SelectedItem | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPerms, setNewPerms] = useState<Set<string>>(new Set());
   const [createError, setCreateError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const handleCreate = async () => {
     setCreateError("");
@@ -63,97 +99,212 @@ export default function PermissionsPage() {
     }
   };
 
+  // Resolve permissions for the selected item
+  const selectedPerms: string[] = selected
+    ? selected.type === "role"
+      ? selected.data.permissions
+      : Array.isArray(selected.data.permissions) ? selected.data.permissions : []
+    : [];
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-lg font-semibold">权限管理</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          角色提供基础权限，权限组可在角色之上叠加额外能力
-        </p>
-      </div>
-
-      {/* Preset roles */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-medium">预设角色</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {roleConfigs.map((role) => (
-            <Card key={role.name}>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{role.label}</span>
-                  <Badge variant={role.name === "admin" ? "default" : "outline"} className="text-[10px]">
-                    {role.name}
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">{role.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {role.permissions.map((p) => (
-                    <Badge key={p} variant="secondary" className="text-[10px]">
-                      {permLabel[p] || p}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Custom permission groups */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-medium">自定义权限组</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              将用户加入权限组可赋予其角色默认权限之外的额外能力
-            </p>
-          </div>
+    <div className="flex gap-6 h-[calc(100vh-3.5rem-3rem)]">
+      {/* Sidebar */}
+      <div className="w-72 shrink-0 flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-lg font-semibold">权限管理</h1>
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            新建权限组
+            新建
           </Button>
         </div>
-        {permGroups.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center text-sm text-muted-foreground">
-              暂无自定义权限组
+
+        <Card className="flex-1 overflow-hidden">
+          <div className="overflow-auto h-full">
+            {/* Preset roles */}
+            <div className="px-2 pt-2 pb-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                预设角色
+              </p>
+              {roleConfigs.map((role) => (
+                <button
+                  key={role.name}
+                  type="button"
+                  onClick={() => setSelected({ type: "role", data: role })}
+                  className={`w-full text-left rounded-md px-2.5 py-2 transition-colors ${
+                    selected?.type === "role" && selected.data.name === role.name
+                      ? "bg-muted"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium flex-1 truncate">{role.label}</span>
+                    <Badge
+                      variant={role.name === "admin" ? "default" : "outline"}
+                      className="text-[9px] shrink-0"
+                    >
+                      {role.permissions.length}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Custom groups */}
+            <div className="px-2 pt-2 pb-2 border-t mt-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 mb-1">
+                自定义权限组
+              </p>
+              {permGroups.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground px-2.5 py-3">
+                  暂无权限组
+                </p>
+              ) : (
+                permGroups.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setSelected({ type: "group", data: g })}
+                    className={`w-full text-left rounded-md px-2.5 py-2 transition-colors ${
+                      selected?.type === "group" && selected.data.id === g.id
+                        ? "bg-muted"
+                        : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium flex-1 truncate">{g.name}</span>
+                      {g.is_system && <Badge variant="outline" className="text-[9px]">系统</Badge>}
+                      <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                        {g.member_count} 人
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Detail panel */}
+      <div className="flex-1 min-w-0">
+        {selected ? (
+          <Card className="h-full overflow-auto">
+            <CardContent className="p-6">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold">
+                      {selected.type === "role" ? selected.data.label : selected.data.name}
+                    </h2>
+                    {selected.type === "role" ? (
+                      <Badge variant={selected.data.name === "admin" ? "default" : "secondary"} className="text-[10px]">
+                        预设角色
+                      </Badge>
+                    ) : (
+                      <>
+                        {(selected.data as PermissionGroup).is_system && (
+                          <Badge variant="outline" className="text-[10px]">系统</Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {(selected.data as PermissionGroup).member_count} 位成员
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {selected.type === "role"
+                      ? selected.data.description
+                      : (selected.data as PermissionGroup).description || "无描述"
+                    }
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {selected.type === "group" && !(selected.data as PermissionGroup).is_system && (
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget({
+                        id: (selected.data as PermissionGroup).id,
+                        name: (selected.data as PermissionGroup).name,
+                      })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost" size="icon" className="h-8 w-8"
+                    onClick={() => setSelected(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Permissions by module */}
+              {/* Color legend */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {actionColors.map((a) => (
+                  <div key={a.action} className="flex items-center gap-1">
+                    <span className={`inline-block h-2 w-2 rounded-full ${a.color.split(" ")[0]}`} />
+                    <span className="text-[10px] text-muted-foreground">{a.action}</span>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="text-sm font-medium mb-3">
+                权限列表
+                <span className="text-muted-foreground font-normal ml-1.5">
+                  ({selectedPerms.length} 项)
+                </span>
+              </h3>
+              <div className="space-y-3">
+                {permModules.map((mod) => {
+                  const modPerms = mod.perms.filter((p) => selectedPerms.includes(p));
+                  const allPerms = mod.perms;
+                  return (
+                    <div key={mod.label} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium">{mod.label}</span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {modPerms.length}/{allPerms.length}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {allPerms.map((p) => {
+                          const has = selectedPerms.includes(p);
+                          const info = permInfo[p];
+                          return (
+                            <span
+                              key={p}
+                              title={info?.hint || `${info?.label} — ${info?.action}`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity ${
+                                has
+                                  ? info?.color || "bg-muted text-foreground"
+                                  : "bg-muted/50 text-muted-foreground/30"
+                              }`}
+                            >
+                              {info?.action || p}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Info for roles */}
+              {selected.type === "role" && (
+                <p className="text-[11px] text-muted-foreground mt-4">
+                  预设角色的权限不可修改。如需自定义权限，请创建权限组并分配给用户。
+                </p>
+              )}
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {permGroups.map((g) => (
-              <Card key={g.id}>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{g.name}</span>
-                      {g.is_system && <Badge variant="outline" className="text-[10px]">系统</Badge>}
-                      <span className="text-[10px] text-muted-foreground">{g.member_count} 位成员</span>
-                    </div>
-                    {!g.is_system && (
-                      <Button
-                        size="icon" variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteGroup.mutate(g.id)}
-                        disabled={deleteGroup.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  {g.description && <p className="text-[11px] text-muted-foreground">{g.description}</p>}
-                  <div className="flex flex-wrap gap-1">
-                    {(Array.isArray(g.permissions) ? g.permissions : []).map((p: string) => (
-                      <Badge key={p} variant="secondary" className="text-[10px]">
-                        {permLabel[p] || p}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card className="h-full flex items-center justify-center">
+            <TableEmpty icon={ShieldCheck} title="选择一个角色或权限组查看详情" />
+          </Card>
         )}
       </div>
 
@@ -175,21 +326,35 @@ export default function PermissionsPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">权限 ({newPerms.size} 项已选)</Label>
-              <div className="rounded-md border p-3 grid grid-cols-2 gap-1.5 max-h-48 overflow-auto">
-                {Object.entries(permLabel).map(([perm, label]) => (
-                  <label key={perm} className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={newPerms.has(perm)}
-                      onChange={(e) => {
-                        const next = new Set(newPerms);
-                        if (e.target.checked) next.add(perm); else next.delete(perm);
-                        setNewPerms(next);
-                      }}
-                      className="rounded"
-                    />
-                    {label}
-                  </label>
+              <div className="rounded-md border p-3 space-y-3 max-h-56 overflow-auto">
+                {permModules.map((mod) => (
+                  <div key={mod.label}>
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1">{mod.label}</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {mod.perms.map((perm) => {
+                        const info = permInfo[perm];
+                        return (
+                          <label
+                            key={perm}
+                            className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:text-foreground"
+                            title={info?.hint}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={newPerms.has(perm)}
+                              onChange={(e) => {
+                                const next = new Set(newPerms);
+                                if (e.target.checked) next.add(perm); else next.delete(perm);
+                                setNewPerms(next);
+                              }}
+                              className="rounded"
+                            />
+                            {info?.action || perm}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -204,6 +369,23 @@ export default function PermissionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete dialog */}
+      <DeleteDialog
+        open={!!deleteTarget}
+        title="删除权限组"
+        name={deleteTarget?.name ?? ""}
+        isPending={deleteGroup.isPending}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteGroup.mutateAsync(deleteTarget.id);
+          if (selected?.type === "group" && (selected.data as PermissionGroup).id === deleteTarget.id) {
+            setSelected(null);
+          }
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
