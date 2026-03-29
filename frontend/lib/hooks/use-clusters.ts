@@ -9,7 +9,7 @@ export function useClusters() {
       const res = await api.get<ComputeCluster[]>("/clusters");
       return res.data;
     },
-    staleTime: 30_000,
+    staleTime: 10_000,
   });
 }
 

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,12 @@ export function InlineEditField({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+
+  // Reset edit state when the underlying value changes (e.g., switching items)
+  useEffect(() => {
+    setEditing(false);
+    setDraft(value);
+  }, [value]);
 
   const handleSave = async () => {
     if (draft === value) { setEditing(false); return; }

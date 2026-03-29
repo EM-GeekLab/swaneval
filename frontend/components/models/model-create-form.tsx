@@ -102,7 +102,6 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
   const handleCreateAndDeploy = async (e: React.FormEvent) => {
     e.preventDefault();
     setDeployError("");
-    const isHF = shForm.source === "huggingface";
     const displayName = shForm.name || shForm.model_id.split("/").pop() || "";
 
     // Step 1: Create the model record
@@ -112,9 +111,7 @@ export function ModelCreateForm({ onSuccess, onClose: _onClose }: ModelCreateFor
       const created = await create.mutateAsync({
         name: displayName,
         provider: shForm.source,
-        endpoint_url: isHF
-          ? `https://api-inference.huggingface.co/models/${shForm.model_id}/v1/chat/completions`
-          : `https://api-inference.modelscope.cn/v1/chat/completions`,
+        endpoint_url: "",  // Will be set by vLLM deployment
         model_type: shForm.source,
         api_format: "openai",
         model_name: shForm.model_id,

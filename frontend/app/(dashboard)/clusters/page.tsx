@@ -682,7 +682,7 @@ export default function ClustersPage() {
               if (d.description) setCreateDescription(d.description);
               if (d.vllm_image) {
                 const known = [
-                  "registry.cn-hangzhou.aliyuncs.com/modelscope-repo/vllm-openai:latest",
+                  "docker.m.daocloud.io/vllm/vllm-openai:latest",
                   "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/vllm/vllm-openai:latest",
                 ];
                 if (known.includes(d.vllm_image)) setCreateVllmImageOption(d.vllm_image);
@@ -737,11 +737,11 @@ export default function ClustersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__default__">默认 (vllm/vllm-openai:latest)</SelectItem>
-                  <SelectItem value="registry.cn-hangzhou.aliyuncs.com/modelscope-repo/vllm-openai:latest">
-                    阿里云 (modelscope-repo)
+                  <SelectItem value="docker.m.daocloud.io/vllm/vllm-openai:latest">
+                    DaoCloud 镜像加速
                   </SelectItem>
                   <SelectItem value="swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/vllm/vllm-openai:latest">
-                    华为云 (ddn-k8s)
+                    华为云镜像加速
                   </SelectItem>
                   <SelectItem value="__custom__">自定义...</SelectItem>
                 </SelectContent>
@@ -756,7 +756,7 @@ export default function ClustersPage() {
                 />
               )}
               <p className="text-[11px] text-muted-foreground">
-                国内网络建议使用阿里云或华为云镜像加速 vLLM 部署
+                国内网络建议使用 DaoCloud 或华为云镜像加速 vLLM 部署
               </p>
             </div>
             {createError && (

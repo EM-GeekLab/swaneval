@@ -195,6 +195,51 @@ async def deploy_vllm(
         ),
     ]
 
+    # -- Model cache PVC -- persist downloaded weights across pod restarts --
+    # Use a stable PVC name based on the model ID (not the random deployment name)
+    # This way, redeploying the same model reuses cached weights
+    label_model = model_name.replace("/", "-")[:63]
+    safe_model_name = hf_model_id.replace("/", "--").lower()[:50]
+    cache_pvc_name = f"swaneval-cache-{safe_model_name}"
+
+    # Create PVC if it doesn't exist
+    def _ensure_cache_pvc():
+        try:
+            core_v1.read_namespaced_persistent_volume_claim(cache_pvc_name, namespace)
+        except Exception:
+            pvc = k8s_client.V1PersistentVolumeClaim(
+                metadata=k8s_client.V1ObjectMeta(
+                    name=cache_pvc_name, namespace=namespace,
+                    labels={"app": "swaneval-vllm", "swaneval.io/model": label_model},
+                ),
+                spec=k8s_client.V1PersistentVolumeClaimSpec(
+                    access_modes=["ReadWriteOnce"],
+                    resources=k8s_client.V1VolumeResourceRequirements(
+                        requests={"storage": f"{memory_gb * 2}Gi"},
+                    ),
+                ),
+            )
+            core_v1.create_namespaced_persistent_volume_claim(
+                namespace=namespace, body=pvc,
+            )
+            logger.info("Created model cache PVC %s (%dGi)", cache_pvc_name, memory_gb * 2)
+
+    await asyncio.to_thread(_ensure_cache_pvc)
+
+    volume_mounts.append(
+        k8s_client.V1VolumeMount(
+            name="model-cache", mount_path="/root/.cache/huggingface",
+        ),
+    )
+    volumes.append(
+        k8s_client.V1Volume(
+            name="model-cache",
+            persistent_volume_claim=k8s_client.V1PersistentVolumeClaimVolumeSource(
+                claim_name=cache_pvc_name,
+            ),
+        ),
+    )
+
     # -- Health probes (matches official Helm chart) --
     readiness_probe = k8s_client.V1Probe(
         http_get=k8s_client.V1HTTPGetAction(path="/health", port=8000),
@@ -245,7 +290,6 @@ async def deploy_vllm(
             ),
         )
 
-    label_model = model_name.replace("/", "-")[:63]
     labels = {"app": dep_name, "swaneval.io/component": "vllm", "swaneval.io/model": label_model}
 
     deployment = k8s_client.V1Deployment(
