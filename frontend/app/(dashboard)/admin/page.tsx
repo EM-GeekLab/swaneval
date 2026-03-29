@@ -27,6 +27,7 @@ import { TableEmpty, TableLoading } from "@/components/table-states";
 import { extractErrorDetail } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useChangePassword, useUpdateUserTokens } from "@/lib/hooks/use-users";
+import { useRoleConfigs } from "@/lib/hooks/use-permissions";
 import { DeleteDialog } from "@/components/delete-dialog";
 import {
   Dialog,
@@ -40,6 +41,28 @@ import { FilterDropdown } from "@/components/filter-dropdown";
 import { utc } from "@/lib/utils";
 import type { User } from "@/lib/types";
 import { useUrlSelection } from "@/lib/hooks/use-url-selection";
+
+const permLabel: Record<string, string> = {
+  "datasets.read": "数据集 · 查看",
+  "datasets.write": "数据集 · 编辑",
+  "datasets.download": "数据集 · 下载",
+  "models.read": "模型 · 查看",
+  "models.write": "模型 · 编辑",
+  "criteria.read": "标准 · 查看",
+  "criteria.write": "标准 · 编辑",
+  "tasks.read": "任务 · 查看",
+  "tasks.create": "任务 · 创建",
+  "tasks.manage": "任务 · 管理",
+  "results.read": "结果 · 查看",
+  "reports.read": "报告 · 查看",
+  "reports.generate": "报告 · 生成",
+  "reports.export": "报告 · 导出",
+  "clusters.read": "集群 · 查看",
+  "clusters.manage": "集群 · 管理",
+  "admin.users": "管理 · 用户",
+  "admin.groups": "管理 · 权限组",
+  "admin.acl": "管理 · ACL",
+};
 
 const roleLabel: Record<string, string> = {
   admin: "管理员",
@@ -60,6 +83,8 @@ const roleBadgeVariant: Record<
 
 export default function AdminPage() {
   const { data: users = [], isLoading } = useUsers();
+  const { data: roleConfigs = [] } = useRoleConfigs();
+  const [showRoles, setShowRoles] = useState(false);
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -168,6 +193,10 @@ export default function AdminPage() {
               <Button size="sm" onClick={() => setShowCreateUser(true)}>
                 <Plus className="h-4 w-4 mr-1" />
                 添加用户
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowRoles(true)}>
+                <ShieldCheck className="h-4 w-4 mr-1" />
+                角色配置
               </Button>
             </div>
           </div>
@@ -546,6 +575,50 @@ export default function AdminPage() {
           setDeleteError("");
         }}
       />
+
+      {/* Role configuration dialog */}
+      <Dialog open={showRoles} onOpenChange={setShowRoles}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>角色配置</DialogTitle>
+            <DialogDescription>查看和管理系统角色的权限配置</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {roleConfigs.map((role) => (
+              <div key={role.name} className="rounded-md border p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{role.label}</span>
+                  <Badge
+                    variant={role.name === "admin" ? "default" : "outline"}
+                    className="text-[10px]"
+                  >
+                    {role.name}
+                  </Badge>
+                  {role.is_preset && (
+                    <span className="text-[10px] text-muted-foreground">
+                      预设角色
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {role.description}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {role.permissions.map((p) => (
+                    <Badge
+                      key={p}
+                      variant="secondary"
+                      className="text-[10px] font-mono"
+                    >
+                      {permLabel[p] || p}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

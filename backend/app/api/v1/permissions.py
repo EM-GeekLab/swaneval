@@ -327,6 +327,58 @@ async def delete_acl(
     await session.commit()
 
 
+# ── Role Configurations ──────────────────────────────────────────────
+
+
+@router.get("/roles")
+async def list_role_configs(
+    _current_user: User = require_permission("admin.groups"),
+):
+    """List all role definitions with their permissions."""
+    preset_roles = [
+        {
+            "name": "admin",
+            "label": "管理员",
+            "description": (
+                "系统完全控制权限，包括用户管理、权限配置、所有资源的增删改查。"
+            ),
+            "permissions": ALL_PERMISSIONS,
+            "is_preset": True,
+        },
+        {
+            "name": "data_admin",
+            "label": "数据管理员",
+            "description": (
+                "管理数据集、评测标准和模型，可创建评测任务和查看结果。"
+                "适合负责数据准备和评测标准维护的团队成员。"
+            ),
+            "permissions": ROLE_PERMISSIONS["data_admin"],
+            "is_preset": True,
+        },
+        {
+            "name": "engineer",
+            "label": "工程师",
+            "description": (
+                "执行和管理评测任务，查看数据集和模型，生成和导出报告。"
+                "适合负责日常评测执行的工程师。"
+            ),
+            "permissions": ROLE_PERMISSIONS["engineer"],
+            "is_preset": True,
+        },
+        {
+            "name": "viewer",
+            "label": "观察者",
+            "description": (
+                "只读访问所有资源，可查看数据集、模型、任务、结果和报告，"
+                "但不能修改任何内容。适合需要了解评测进展的管理层或外部审阅者。"
+            ),
+            "permissions": ROLE_PERMISSIONS["viewer"],
+            "is_preset": True,
+        },
+    ]
+    return preset_roles
+
+
 # ── Available Permissions ─────────────────────────────────────────────
 
 

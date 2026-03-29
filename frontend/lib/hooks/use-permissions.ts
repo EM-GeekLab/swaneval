@@ -2,6 +2,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { PermissionGroup, ResourceAcl } from "@/lib/types";
 
+export interface RoleConfig {
+  name: string;
+  label: string;
+  description: string;
+  permissions: string[];
+  is_preset: boolean;
+}
+
+export function useRoleConfigs() {
+  return useQuery({
+    queryKey: ["permissions", "roles"],
+    queryFn: async () => {
+      const res = await api.get<RoleConfig[]>("/permissions/roles");
+      return res.data;
+    },
+    staleTime: 120_000,
+  });
+}
+
 export function usePermissionGroups() {
   return useQuery({
     queryKey: ["permission-groups"],
