@@ -26,7 +26,8 @@ import {
   Send,
   X as XIcon,
 } from "lucide-react";
-import { useUpdateModel, useTestModel, usePlayground, useUndeployModel, useCheckDeployHealth } from "@/lib/hooks/use-models";
+import { useUpdateModel, useTestModel, usePlayground, useDeployModel, useUndeployModel, useCheckDeployHealth } from "@/lib/hooks/use-models";
+import { useClusters } from "@/lib/hooks/use-clusters";
 import type { LLMModel } from "@/lib/types";
 import { cn, utc } from "@/lib/utils";
 import { formatTime } from "@/lib/time";
@@ -58,8 +59,12 @@ export function ModelDetailPanel({
   const update = useUpdateModel();
   const testModel = useTestModel();
   const playground = usePlayground();
+  const deploy = useDeployModel();
   const undeploy = useUndeployModel();
   const checkHealth = useCheckDeployHealth();
+
+  const { data: clusters } = useClusters();
+  const [redeployClusterId, setRedeployClusterId] = useState(model.cluster_id || "");
 
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
@@ -324,16 +329,52 @@ export function ModelDetailPanel({
                     <XIcon className="h-3 w-3" />
                     {model.deploy_status === DEPLOY_STATUS.CLEANUP_FAILED ? "清理失败" : "部署失败"}
                   </div>
-                  <Button size="sm" variant="outline" className="w-full text-xs"
-                    onClick={() => undeploy.mutate(model.id)} disabled={undeploy.isPending}>
-                    {undeploy.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                    清理资源
-                  </Button>
+                  <Select value={redeployClusterId} onValueChange={setRedeployClusterId}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="选择集群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clusters?.filter(c => c.status === "ready").map(c => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 text-xs"
+                      onClick={() => deploy.mutate({ model_id: model.id, cluster_id: redeployClusterId })}
+                      disabled={deploy.isPending || !redeployClusterId}>
+                      {deploy.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      重新部署
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 text-xs"
+                      onClick={() => undeploy.mutate(model.id)} disabled={undeploy.isPending}>
+                      {undeploy.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      清理资源
+                    </Button>
+                  </div>
                 </div>
               ) : model.deploy_status === DEPLOY_STATUS.STOPPED ? (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
-                  已停止
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                    已停止
+                  </div>
+                  <Select value={redeployClusterId} onValueChange={setRedeployClusterId}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="选择集群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clusters?.filter(c => c.status === "ready").map(c => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline" className="w-full text-xs"
+                    onClick={() => deploy.mutate({ model_id: model.id, cluster_id: redeployClusterId })}
+                    disabled={deploy.isPending || !redeployClusterId}>
+                    {deploy.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                    重新部署
+                  </Button>
                 </div>
               ) : null}
             </div>
