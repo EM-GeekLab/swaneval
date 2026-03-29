@@ -109,7 +109,7 @@ export default function PermissionsPage() {
   return (
     <div className="flex gap-6 h-[calc(100vh-3.5rem-3rem)]">
       {/* Sidebar */}
-      <div className="w-72 shrink-0 flex flex-col">
+      <div className="w-80 shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-semibold">权限管理</h1>
           <Button size="sm" onClick={() => setShowCreate(true)}>
