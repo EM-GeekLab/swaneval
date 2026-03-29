@@ -186,7 +186,7 @@ async def delete_cluster(
     if not cluster:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
 
-    # Check for active deployments
+    # Block deletion if models are actively deploying/running on this cluster
     from app.models.llm_model import LLMModel
     active_stmt = select(LLMModel).where(
         LLMModel.cluster_id == cluster_id,
@@ -199,6 +199,16 @@ async def delete_cluster(
             status.HTTP_409_CONFLICT,
             f"集群上仍有运行中的模型部署 ({names})，请先停止部署后再删除集群",
         )
+
+    # Clear cluster_id FK on all models that reference this cluster (stopped/failed/etc.)
+    ref_stmt = select(LLMModel).where(LLMModel.cluster_id == cluster_id)
+    ref_models = (await session.exec(ref_stmt)).all()
+    for m in ref_models:
+        m.cluster_id = None
+        m.deploy_status = ""
+        m.vllm_deployment_name = ""
+        m.endpoint_url = ""
+        session.add(m)
 
     await session.delete(cluster)
     await session.commit()
