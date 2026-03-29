@@ -10,8 +10,6 @@ import os
 import subprocess
 import tempfile
 
-import yaml
-
 from app.services.encryption import decrypt
 
 logger = logging.getLogger(__name__)
@@ -197,16 +195,10 @@ async def _install_via_helm(kubeconfig_yaml: str) -> dict:
 
 async def check_gpu_operator_status(kubeconfig_encrypted: str) -> dict:
     """Check if GPU support is available on the cluster."""
-    kubeconfig_yaml = decrypt(kubeconfig_encrypted)
+    from app.services.k8s_client import create_core_v1
 
     def _check():
-        kubeconfig_dict = yaml.safe_load(kubeconfig_yaml)
-
-        from kubernetes import client
-        from kubernetes.config import new_client_from_config_dict
-
-        api_client = new_client_from_config_dict(kubeconfig_dict)
-        v1 = client.CoreV1Api(api_client=api_client)
+        v1 = create_core_v1(kubeconfig_encrypted)
 
         # Check if any node has nvidia.com/gpu
         nodes = v1.list_node().items

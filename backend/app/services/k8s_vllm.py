@@ -17,9 +17,16 @@ import logging
 import time as _time
 import uuid
 
-from app.services.k8s_client import create_both
+from app.services.k8s_client import create_api_client, create_both, create_core_v1
 
 logger = logging.getLogger(__name__)
+
+
+def is_k8s_not_found(exc: Exception) -> bool:
+    """Check if a K8s API exception is a 404 Not Found."""
+    s = str(exc).lower()
+    return "not found" in s or "404" in s
+
 
 # Default vLLM image -- matches official Helm chart
 VLLM_IMAGE = "vllm/vllm-openai:latest"
@@ -36,7 +43,6 @@ async def prepare_namespace(
     """Ensure the namespace exists, creating it if necessary."""
     from kubernetes import client as k8s_client
 
-    from app.services.k8s_client import create_core_v1
     core_v1 = await asyncio.to_thread(create_core_v1, kubeconfig_encrypted)
 
     def _ensure():
@@ -68,8 +74,6 @@ async def validate_gpu_support(kubeconfig_encrypted: str, gpu_count: int) -> lis
 
     try:
         from kubernetes import client as k8s_client
-
-        from app.services.k8s_client import create_api_client
 
         api_client = await asyncio.to_thread(create_api_client, kubeconfig_encrypted)
 
@@ -558,9 +562,6 @@ async def cleanup_vllm(
         _get_k8s_clients, kubeconfig_encrypted,
     )
 
-    def _is_not_found(exc: Exception) -> bool:
-        return "not found" in str(exc).lower() or "404" in str(exc)
-
     def _delete():
         import time
 
@@ -573,7 +574,7 @@ async def cleanup_vllm(
             apps_v1.delete_namespaced_deployment(deployment_name, namespace)
             dep_ok = True
         except Exception as e:
-            if _is_not_found(e):
+            if is_k8s_not_found(e):
                 dep_ok = True  # Already gone — fine
                 logger.info("Deployment %s already removed", deployment_name)
             else:
@@ -584,7 +585,7 @@ async def cleanup_vllm(
             core_v1.delete_namespaced_service(deployment_name, namespace)
             svc_ok = True
         except Exception as e:
-            if _is_not_found(e):
+            if is_k8s_not_found(e):
                 svc_ok = True  # Already gone — fine
                 logger.info("Service %s already removed", deployment_name)
             else:

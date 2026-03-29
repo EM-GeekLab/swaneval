@@ -103,17 +103,16 @@ async def list_reports(
     # Filter by visibility
     visible = []
     for r in all_reports:
-        if current_user.role == "admin":
-            visible.append(r)
-        elif r.created_by == current_user.id:
-            visible.append(r)
-        elif r.visibility == "public":
+        if (
+            current_user.role == "admin"
+            or r.created_by == current_user.id
+            or r.visibility == "public"
+        ):
             visible.append(r)
         elif r.visibility == "team":
             visible.append(r)  # team = all authenticated users
-        elif r.allowed_users:
-            if str(current_user.id) in r.allowed_users.split(","):
-                visible.append(r)
+        elif r.allowed_users and str(current_user.id) in r.allowed_users.split(","):
+            visible.append(r)
     reports = visible
 
     return [

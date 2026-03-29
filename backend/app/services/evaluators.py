@@ -303,7 +303,7 @@ print(float(score))
         return max(0.0, min(1.0, float(stdout)))
     except subprocess.TimeoutExpired as e:
         logger.error("Sandbox execution error: %s", e)
-        raise ValueError(f"Script timed out after {timeout}s")
+        raise ValueError(f"Script timed out after {timeout}s") from e
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -352,10 +352,11 @@ def evaluate_llm_judge(config: dict, expected: str, actual: str) -> float:
         data = resp.json()
 
     if anthropic_mode:
-        text_parts = []
-        for block in data.get("content", []):
-            if isinstance(block, dict) and block.get("type") == "text":
-                text_parts.append(str(block.get("text", "")))
+        text_parts = [
+            str(block.get("text", ""))
+            for block in data.get("content", [])
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
         judge_text = "\n".join([x for x in text_parts if x])
     else:
         judge_text = str(data.get("choices", [{}])[0].get("message", {}).get("content", ""))

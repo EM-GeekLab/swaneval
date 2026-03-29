@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
@@ -341,24 +342,22 @@ async def stream_import_progress(
         while True:
             job = get_job(job_id)
             if not job:
-                payload = json.dumps(dict(status="not_found"))
+                payload = json.dumps({"status": "not_found"})
                 yield "data: " + payload + "\n\n"
                 return
-            payload = json.dumps(dict(
-                status=job.status,
-                phase=job.phase,
-                progress=job.progress,
-                error=job.error,
-            ))
+            payload = json.dumps({
+                "status": job.status,
+                "phase": job.phase,
+                "progress": job.progress,
+                "error": job.error,
+            })
             yield "data: " + payload + "\n\n"
             if job.status in ("done", "failed"):
                 return
             evt = get_event(job_id)
             if evt:
-                try:
+                with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(evt.wait(), timeout=2.0)
-                except asyncio.TimeoutError:
-                    pass
 
     return StreamingResponse(
         event_stream(),

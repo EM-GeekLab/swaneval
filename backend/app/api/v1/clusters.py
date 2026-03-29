@@ -32,6 +32,28 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+async def _get_cluster_or_404(
+    session: AsyncSession, cluster_id: uuid.UUID,
+) -> ComputeCluster:
+    """Fetch a cluster or raise 404."""
+    cluster = await session.get(ComputeCluster, cluster_id)
+    if not cluster:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
+    return cluster
+
+
+def _require_kubeconfig(cluster: ComputeCluster) -> str:
+    """Return kubeconfig or raise 400."""
+    if not cluster.kubeconfig_encrypted:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "集群缺少 Kubeconfig")
+    return cluster.kubeconfig_encrypted
+
+
+# ---------------------------------------------------------------------------
 # Background probe helper
 # ---------------------------------------------------------------------------
 
@@ -130,9 +152,7 @@ async def get_cluster(
     current_user: User = require_permission("clusters.read"),
 ):
     """Get details for a single compute cluster."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
+    cluster = await _get_cluster_or_404(session, cluster_id)
     return cluster
 
 
@@ -144,9 +164,7 @@ async def update_cluster(
     current_user: User = require_permission("clusters.manage"),
 ):
     """Update cluster name, description, or namespace."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
+    cluster = await _get_cluster_or_404(session, cluster_id)
 
     if body.name is not None:
         cluster.name = body.name
@@ -182,9 +200,7 @@ async def delete_cluster(
     current_user: User = require_permission("clusters.manage"),
 ):
     """Delete a compute cluster."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
+    cluster = await _get_cluster_or_404(session, cluster_id)
 
     # Block deletion if models are actively deploying/running on this cluster
     from app.models.llm_model import LLMModel
@@ -222,13 +238,8 @@ async def probe_cluster(
     current_user: User = require_permission("clusters.manage"),
 ):
     """Force a resource probe on the cluster."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "集群缺少 Kubeconfig",
-        )
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     cluster.status = ClusterStatus.connecting
     cluster.status_message = ""
@@ -250,13 +261,8 @@ async def list_cluster_nodes(
     current_user: User = require_permission("clusters.read"),
 ):
     """List nodes in the cluster with resource details."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "集群缺少 Kubeconfig",
-        )
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     try:
         nodes = await asyncio.to_thread(
@@ -278,11 +284,8 @@ async def list_cluster_deployments(
     current_user: User = require_permission("clusters.read"),
 ):
     """List vLLM deployments in the cluster namespace."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(400, "集群缺少 Kubeconfig")
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     from app.services.k8s_client import create_apps_v1
 
@@ -294,9 +297,7 @@ async def list_cluster_deployments(
                 cluster.namespace,
                 label_selector="swaneval.io/component=vllm",
             )
-            result = []
-            for dep in deps.items:
-                result.append({
+            result = [{
                     "name": dep.metadata.name,
                     "model": dep.metadata.labels.get("swaneval.io/model", ""),
                     "replicas": dep.spec.replicas or 0,
@@ -306,7 +307,7 @@ async def list_cluster_deployments(
                         dep.metadata.creation_timestamp.isoformat()
                         if dep.metadata.creation_timestamp else ""
                     ),
-                })
+                } for dep in deps.items]
             return result
 
         return await asyncio.to_thread(_list)
@@ -323,11 +324,8 @@ async def get_deployment_logs(
     current_user: User = require_permission("clusters.read"),
 ):
     """Get logs from the first pod of a vLLM deployment."""
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(400, "集群缺少 Kubeconfig")
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     from app.services.k8s_client import create_core_v1
 
@@ -384,11 +382,8 @@ async def install_gpu_support(
     """
     from app.services.gpu_operator import install_gpu_operator
 
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(400, "集群缺少 Kubeconfig")
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     result = await install_gpu_operator(cluster.kubeconfig_encrypted, method=method)
 
@@ -410,10 +405,7 @@ async def get_gpu_status(
     """Check GPU support status on the cluster."""
     from app.services.gpu_operator import check_gpu_operator_status
 
-    cluster = await session.get(ComputeCluster, cluster_id)
-    if not cluster:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "集群未找到")
-    if not cluster.kubeconfig_encrypted:
-        raise HTTPException(400, "集群缺少 Kubeconfig")
+    cluster = await _get_cluster_or_404(session, cluster_id)
+    _require_kubeconfig(cluster)
 
     return await check_gpu_operator_status(cluster.kubeconfig_encrypted)

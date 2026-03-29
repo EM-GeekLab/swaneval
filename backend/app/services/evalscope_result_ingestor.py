@@ -90,7 +90,7 @@ async def _iter_json_rows(
     results: list[dict[str, Any]] = []
     parse_errors = 0
     if file_key.endswith(".jsonl"):
-        for i, line in enumerate(text.splitlines()):
+        for line in text.splitlines():
             line = line.strip()
             if not line:
                 continue

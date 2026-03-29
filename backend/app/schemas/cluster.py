@@ -20,8 +20,8 @@ class ClusterCreate(BaseModel):
         import yaml
         try:
             data = yaml.safe_load(v)
-        except Exception:
-            raise ValueError("Invalid YAML format")
+        except Exception as exc:
+            raise ValueError("Invalid YAML format") from exc
         if not isinstance(data, dict) or "clusters" not in data:
             raise ValueError("Invalid kubeconfig: missing 'clusters' key")
         return v

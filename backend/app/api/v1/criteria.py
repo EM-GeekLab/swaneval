@@ -177,5 +177,5 @@ async def test_criterion(
     try:
         score = run_criterion(c.type, config_json, body.expected, body.actual)
     except Exception as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"测试失败: {e}")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"测试失败: {e}") from e
     return {"score": score, "criterion": c.name, "type": c.type}

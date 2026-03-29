@@ -164,12 +164,12 @@ async def delete_model(
     try:
         await session.delete(m)
         await session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "无法删除：该模型仍被评测任务引用，请先删除相关任务。",
-        )
+        ) from exc
 
 
 @router.post("/{model_id}/playground", response_model=PlaygroundResponse)
@@ -352,7 +352,7 @@ async def undeploy_model(
 ):
     """Stop and remove a vLLM deployment for a model."""
     from app.models.compute_cluster import ComputeCluster
-    from app.services.k8s_vllm import cleanup_vllm
+    from app.services.k8s_vllm import cleanup_vllm, is_k8s_not_found
 
     m = await session.get(LLMModel, model_id)
     if not m:
@@ -385,8 +385,7 @@ async def undeploy_model(
             )
             cleanup_ok = True
         except Exception as e:
-            err_str = str(e).lower()
-            if "not found" in err_str or "404" in err_str:
+            if is_k8s_not_found(e):
                 # Already gone — that's fine
                 cleanup_ok = True
                 logger.info("Deployment %s already removed", dep_name)
@@ -406,7 +405,7 @@ async def undeploy_model(
     session.add(m)
     await session.commit()
     await session.refresh(m)
-    return {"status": "undeployed"}
+    return {"status": m.deploy_status}
 
 
 @router.post("/{model_id}/check-deploy")
@@ -430,7 +429,7 @@ async def check_deploy_health(
         return {"status": m.deploy_status, "healthy": False, "reason": "missing deployment info"}
 
     from app.models.compute_cluster import ComputeCluster
-    from app.services.k8s_vllm import get_deployment_status
+    from app.services.k8s_vllm import get_deployment_status, is_k8s_not_found
 
     cluster = await session.get(ComputeCluster, m.cluster_id)
     if not cluster or not cluster.kubeconfig_encrypted:
@@ -441,9 +440,8 @@ async def check_deploy_health(
             cluster.kubeconfig_encrypted, cluster.namespace, m.vllm_deployment_name,
         )
     except Exception as e:
-        err_str = str(e).lower()
         # Only mark as failed if the deployment is truly gone (404), not on transient errors
-        if "not found" in err_str or "404" in err_str:
+        if is_k8s_not_found(e):
             m.deploy_status = "failed"
             m.endpoint_url = ""
             m.vllm_deployment_name = ""

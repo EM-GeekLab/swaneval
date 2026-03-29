@@ -58,11 +58,7 @@ def probe_cluster_resources(kubeconfig_encrypted: str) -> dict:
         gpu = int(alloc.get("nvidia.com/gpu", 0))
         total_gpu += gpu
         # CPU (convert from e.g. "8" or "8000m")
-        cpu_str = alloc.get("cpu", "0")
-        if cpu_str.endswith("m"):
-            total_cpu += int(cpu_str[:-1])
-        else:
-            total_cpu += int(float(cpu_str) * 1000)
+        total_cpu += _parse_cpu(alloc.get("cpu", "0"))
         # Memory (convert from e.g. "64Gi")
         mem_str = alloc.get("memory", "0")
         total_mem += _parse_memory(mem_str)
@@ -108,8 +104,7 @@ def get_cluster_nodes(kubeconfig_encrypted: str) -> list[dict]:
         alloc = node.status.allocatable or {}
         labels = node.metadata.labels or {}
         gpu = int(alloc.get("nvidia.com/gpu", 0))
-        cpu_str = alloc.get("cpu", "0")
-        cpu_m = int(cpu_str[:-1]) if cpu_str.endswith("m") else int(float(cpu_str) * 1000)
+        cpu_m = _parse_cpu(alloc.get("cpu", "0"))
         result.append({
             "name": node.metadata.name,
             "gpu_count": gpu,
@@ -124,6 +119,17 @@ def get_cluster_nodes(kubeconfig_encrypted: str) -> list[dict]:
             ),
         })
     return result
+
+
+def _parse_cpu(cpu_str: str) -> int:
+    """Parse K8s CPU string to millicores."""
+    cpu_str = str(cpu_str)
+    if cpu_str.endswith("m"):
+        return int(cpu_str[:-1])
+    try:
+        return int(float(cpu_str) * 1000)
+    except (ValueError, OverflowError):
+        return 0
 
 
 def _parse_memory(mem_str: str) -> int:

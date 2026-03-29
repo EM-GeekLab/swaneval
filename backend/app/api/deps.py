@@ -26,8 +26,8 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "令牌无效或已过期")
     try:
         user_id = uuid.UUID(user_id_str)
-    except ValueError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "令牌内容无效")
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "令牌内容无效") from exc
 
     user = await session.get(User, user_id)
     if not user or not user.is_active:

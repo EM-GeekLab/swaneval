@@ -1,6 +1,7 @@
 """In-process task runner for MVP. Runs eval tasks as asyncio background tasks."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -187,8 +188,8 @@ async def _read_bytes(
     """Read a file as bytes. Raises DatasetNotFoundError if missing."""
     try:
         return await _raw_read_bytes(storage, source_uri, key=key)
-    except FileNotFoundError:
-        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}")
+    except FileNotFoundError as exc:
+        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}") from exc
 
 
 async def _read_text(
@@ -199,8 +200,8 @@ async def _read_text(
     """Read a file as UTF-8 text. Raises DatasetNotFoundError if missing."""
     try:
         return await _raw_read_text(storage, source_uri, key=key)
-    except FileNotFoundError:
-        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}")
+    except FileNotFoundError as exc:
+        raise DatasetNotFoundError(f"Dataset file not found: {source_uri}") from exc
 
 
 async def _run_task_with_evalscope(
@@ -540,10 +541,8 @@ async def run_task(task_id: uuid.UUID):
                     # Parse resource config
                     res_cfg = {}
                     if hasattr(task, "resource_config") and task.resource_config:
-                        try:
+                        with contextlib.suppress(json.JSONDecodeError, TypeError):
                             res_cfg = json.loads(task.resource_config)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
 
                     gpu_count = res_cfg.get("gpu_count", 1)
                     gpu_type = res_cfg.get("gpu_type", cluster.gpu_type or "")
@@ -657,8 +656,7 @@ async def run_task(task_id: uuid.UUID):
                     logger.warning("Task %s: dataset '%s' has 0 rows", task_id, ds.name)
                     continue
                 logger.info("Task %s: loaded %d rows from '%s'", task_id, len(rows), ds.name)
-                for row in rows:
-                    all_rows.append((ds_id, row))
+                all_rows.extend((ds_id, row) for row in rows)
 
             if not all_rows:
                 error_summary = (
@@ -792,7 +790,7 @@ async def run_task(task_id: uuid.UUID):
                             criterion_type=crit_type,
                         ).observe(score)
                         return score
-                    except Exception as e:
+                    except Exception as e:  # noqa: PERF203
                         last_err = e
                         if attempt < 2:
                             logger.warning(

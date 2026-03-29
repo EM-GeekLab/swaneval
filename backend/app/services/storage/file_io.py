@@ -28,8 +28,8 @@ async def read_bytes(
     p = Path(source_uri)
     try:
         return await asyncio.to_thread(p.read_bytes)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {source_uri}")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"File not found: {source_uri}") from exc
 
 
 async def read_text(
@@ -49,5 +49,5 @@ async def read_text(
     p = Path(source_uri)
     try:
         return await asyncio.to_thread(p.read_text, encoding="utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {source_uri}")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"File not found: {source_uri}") from exc

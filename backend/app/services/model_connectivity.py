@@ -94,4 +94,4 @@ async def test_model_connectivity(
 
 
 # Prevent pytest from collecting this helper as a test function.
-setattr(cast(Any, test_model_connectivity), "__test__", False)
+cast(Any, test_model_connectivity).__test__ = False

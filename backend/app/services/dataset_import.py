@@ -196,16 +196,14 @@ async def import_modelscope(
 
         file_id = uuid.uuid4()
         key = f"uploads/{file_id}.jsonl"
-        lines = []
-        for item in ds:
-            lines.append(json.dumps(item, ensure_ascii=False))
+        lines = [json.dumps(item, ensure_ascii=False) for item in ds]
         content_bytes = "\n".join(lines).encode("utf-8")
         uri = await storage.write_file(key, content_bytes)
         return uri, len(lines), len(content_bytes)
-    except ImportError:
+    except ImportError as exc:
         raise ValueError(
             "需要安装 ModelScope SDK: pip install modelscope"
-        )
+        ) from exc
     except Exception as e:
         raise ValueError(
             f"导入 ModelScope 数据集 '{clean_id}' 失败: {e}"
@@ -276,9 +274,7 @@ async def _load_via_datasets_lib(
 
     def _blocking_load():
         d = load_dataset(**kwargs)
-        lines = []
-        for item in d:
-            lines.append(json.dumps(dict(item), ensure_ascii=False, default=str))
+        lines = [json.dumps(dict(item), ensure_ascii=False, default=str) for item in d]
         return lines
 
     lines = await asyncio.to_thread(_blocking_load)

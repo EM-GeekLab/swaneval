@@ -128,10 +128,7 @@ class S3Storage(StorageBackend):
                     if obj_key.endswith("/"):
                         continue
                     # Convert back to relative key (strip our prefix)
-                    if self._prefix:
-                        rel = obj_key[len(self._prefix) + 1 :]
-                    else:
-                        rel = obj_key
+                    rel = obj_key[len(self._prefix) + 1:] if self._prefix else obj_key
                     # Apply pattern filter
                     if patterns:
                         name = rel.rsplit("/", 1)[-1]

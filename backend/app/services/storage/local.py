@@ -93,13 +93,15 @@ class LocalFileStorage(StorageBackend):
             results: list[str] = []
             if patterns:
                 for pat in patterns:
-                    for p in root.rglob(pat):
-                        if p.is_file():
-                            results.append(_to_posix(str(p.relative_to(self._root))))
+                    results.extend(
+                        _to_posix(str(p.relative_to(self._root)))
+                        for p in root.rglob(pat) if p.is_file()
+                    )
             else:
-                for p in root.rglob("*"):
-                    if p.is_file():
-                        results.append(_to_posix(str(p.relative_to(self._root))))
+                results.extend(
+                    _to_posix(str(p.relative_to(self._root)))
+                    for p in root.rglob("*") if p.is_file()
+                )
             return sorted(results)
 
         return await asyncio.to_thread(_list)

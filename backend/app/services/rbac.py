@@ -1,5 +1,6 @@
 """RBAC permission checking service."""
 
+import contextlib
 import json
 import uuid as uuid_mod
 
@@ -78,10 +79,8 @@ async def get_user_permissions(session: AsyncSession, user: User) -> set[str]:
     result = await session.exec(stmt)
     perms: set[str] = set()
     for row in result.all():
-        try:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
             perms.update(json.loads(row))
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     # Role provides base permissions, groups add extra on top
     role_defaults = set(ROLE_PERMISSIONS.get(user.role, []))
@@ -122,9 +121,10 @@ async def check_resource_access(
 
     # Check direct user ACLs
     for acl in acls:
-        if acl.grantee_type == "user" and acl.grantee_id == user.id:
-            if _level_sufficient(acl.access_level, required_level):
-                return True
+        if (acl.grantee_type == "user"
+                and acl.grantee_id == user.id
+                and _level_sufficient(acl.access_level, required_level)):
+            return True
 
     # Check group ACLs
     group_stmt = select(UserGroupMembership.group_id).where(
@@ -132,9 +132,10 @@ async def check_resource_access(
     )
     user_groups = set((await session.exec(group_stmt)).all())
     for acl in acls:
-        if acl.grantee_type == "group" and acl.grantee_id in user_groups:
-            if _level_sufficient(acl.access_level, required_level):
-                return True
+        if (acl.grantee_type == "group"
+                and acl.grantee_id in user_groups
+                and _level_sufficient(acl.access_level, required_level)):
+            return True
 
     return False
 
