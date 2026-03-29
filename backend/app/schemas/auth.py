@@ -9,7 +9,6 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
-    role: UserRole = UserRole.viewer
 
 
 class LoginRequest(BaseModel):

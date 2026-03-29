@@ -50,7 +50,7 @@ async def register(body: RegisterRequest, session: AsyncSession = Depends(get_db
         username="admin" if is_first else body.username,
         email=body.email,
         hashed_password=hash_password(body.password),
-        role=UserRole.admin if is_first else body.role,
+        role=UserRole.admin if is_first else UserRole.viewer,
         nickname="",
     )
     session.add(user)

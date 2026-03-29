@@ -75,8 +75,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const body = isFirstUser
-        ? { ...regForm, username: "admin", role: "admin" }
-        : { ...regForm, role: "engineer" };
+        ? { ...regForm, username: "admin" }
+        : regForm;
       await api.post("/auth/register", body);
       await qc.invalidateQueries({ queryKey: ["user-count"] });
       setSuccess("账号创建成功，请在下方登录。");
