@@ -158,7 +158,8 @@ async def extract_primary_score(
     reports_prefix = f"{work_dir_key}/reports"
     files = await storage.list_files(reports_prefix, patterns=["*.json"])
     if not files:
-        return 0.0  # No report files yet — task may still be running
+        from app.errors import ResultIngestionError
+        raise ResultIngestionError(f"No report files found in {reports_prefix} after task completion")
     read_errors: list[str] = []
     for f in files:
         try:
