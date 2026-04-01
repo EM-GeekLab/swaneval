@@ -1,4 +1,12 @@
-"""Built-in evaluation functions for criteria types."""
+"""Built-in evaluation functions for criteria types.
+
+.. deprecated::
+    This module is retained as a **fallback** for when the EvalScope
+    service is unavailable.  The primary evaluation engine is now
+    EvalScope HTTP (see ``evalscope_client.py``).  New metric
+    implementations should be added to the EvalScope container's
+    ``custom_metrics/`` package, not here.
+"""
 
 import json
 import logging

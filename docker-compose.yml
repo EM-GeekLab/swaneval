@@ -51,11 +51,14 @@ services:
       CORS_ORIGINS: '["*"]'
       STORAGE_BACKEND: local
       STORAGE_ROOT: /data
+      EVALSCOPE_SERVICE_URL: "http://evalscope:9000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      evalscope:
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -69,6 +72,36 @@ services:
       NEXT_PUBLIC_API_URL: "http://localhost:${BACKEND_PORT:-8000}/api/v1"
     depends_on:
       - backend
+    restart: unless-stopped
+
+  # ── EvalScope 评测引擎 ──
+
+  evalscope:
+    build:
+      context: ./evalscope
+      dockerfile: Dockerfile
+    container_name: swaneval-evalscope
+    ports:
+      - "${EVALSCOPE_PORT:-9000}:9000"
+    volumes:
+      - swaneval_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  evalscope-sandbox:
+    image: modelscope/ms-enclave:latest
+    container_name: swaneval-sandbox
+    ports:
+      - "${SANDBOX_PORT:-5000}:5000"
+    command: ["ms-enclave", "server", "--host", "0.0.0.0", "--port", "5000"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    profiles:
+      - sandbox
     restart: unless-stopped
 
   # ── 独立 Worker（可选，用于生产环境水平扩展）──
@@ -89,11 +122,14 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       STORAGE_BACKEND: local
       STORAGE_ROOT: /data
+      EVALSCOPE_SERVICE_URL: "http://evalscope:9000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      evalscope:
+        condition: service_started
     restart: unless-stopped
     profiles:
       - worker

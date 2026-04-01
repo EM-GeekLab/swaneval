@@ -1,19 +1,16 @@
 import json
-import sys
 import tempfile
-import types
 import unittest
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import patch
 
 from app.services.evalscope_adapter import (
     _find_numeric_score,
     _normalize_qa_row,
-    build_evalscope_task_config,
+    build_evalscope_http_payload,
     convert_dataset_to_general_qa_jsonl,
     extract_primary_score,
-    run_evalscope_task,
+    map_criteria_to_evalscope,
 )
 from app.services.storage.local import LocalFileStorage
 
@@ -119,90 +116,118 @@ class TestEvalscopeAdapter(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(converted, 2)
 
-    def test_build_evalscope_task_config_defaults_and_seed(self):
-        fake_config_module = types.ModuleType("evalscope.config")
+    def test_build_evalscope_http_payload_basic(self):
+        model = cast(
+            Any,
+            SimpleNamespace(
+                name="mock-model",
+                model_name="mock-model",
+                endpoint_url="http://127.0.0.1:8801/v1/chat/completions",
+                api_key="real-key",
+            ),
+        )
+        dataset = cast(
+            Any,
+            SimpleNamespace(
+                id="ds-1",
+                name="test-ds",
+                source_uri="data/e2e_cases/sample.jsonl",
+            ),
+        )
+        criterion = cast(
+            Any,
+            SimpleNamespace(
+                id="c-1",
+                name="em",
+                type="preset",
+                config_json='{"metric": "exact_match"}',
+            ),
+        )
+        payload = build_evalscope_http_payload(
+            model=model,
+            datasets=[dataset],
+            criteria=[criterion],
+            params={"temperature": 0.2, "seed": 7},
+            repeat_count=3,
+            work_dir="/data/outputs/task-1",
+            evalscope_input_root="/data/inputs",
+        )
+        self.assertEqual(payload["model"], "mock-model")
+        self.assertEqual(payload["api_key"], "real-key")
+        self.assertEqual(payload["generation_config"]["temperature"], 0.2)
+        self.assertEqual(payload["seed"], 7)
+        self.assertEqual(payload["repeats"], 3)
+        self.assertIn("exact_match", payload["dataset_args"]["general_qa"]["metric_list"])
 
-        class FakeTaskConfig:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
+    def test_build_evalscope_http_payload_empty_api_key(self):
+        model = cast(
+            Any,
+            SimpleNamespace(
+                name="m", model_name="m",
+                endpoint_url="http://api", api_key="",
+            ),
+        )
+        dataset = cast(
+            Any,
+            SimpleNamespace(
+                id="ds-1", name="ds", source_uri="a/b/case.json",
+            ),
+        )
+        criterion = cast(
+            Any,
+            SimpleNamespace(
+                id="c-1", name="em", type="preset",
+                config_json='{"metric": "bleu"}',
+            ),
+        )
+        payload = build_evalscope_http_payload(
+            model=model, datasets=[dataset], criteria=[criterion],
+            params={}, repeat_count=1, work_dir="w", evalscope_input_root="r",
+        )
+        self.assertEqual(payload["api_key"], "EMPTY")
 
-        setattr(fake_config_module, "TaskConfig", FakeTaskConfig)
+    def test_map_criteria_to_evalscope_preset(self):
+        criteria = [
+            cast(Any, SimpleNamespace(
+                id="1", type="preset",
+                config_json='{"metric": "exact_match"}',
+            )),
+            cast(Any, SimpleNamespace(
+                id="2", type="preset",
+                config_json='{"metric": "bleu"}',
+            )),
+        ]
+        result = map_criteria_to_evalscope(criteria)
+        self.assertIn("exact_match", result["metric_list"])
+        self.assertIn("bleu", result["metric_list"])
 
-        with patch.dict(sys.modules, {"evalscope.config": fake_config_module}):
-            model = cast(
-                Any,
-                SimpleNamespace(
-                    name="mock-model",
-                    endpoint_url="http://127.0.0.1:8801/v1/chat/completions",
-                    api_key="real-key",
-                ),
-            )
-            dataset = cast(
-                Any,
-                SimpleNamespace(source_uri="data/e2e_cases/sample.jsonl"),
-            )
-            cfg = cast(
-                Any,
-                build_evalscope_task_config(
-                    model=model,
-                    dataset=dataset,
-                    evalscope_input_root="data/evalscope_input",
-                    params={"temperature": 0.2, "seed": 7},
-                    repeat_count=0,
-                    work_dir="data/evalscope_outputs/task-1",
-                ),
-            )
-            self.assertEqual(cfg.kwargs["model"], "mock-model")
-            self.assertEqual(cfg.kwargs["generation_config"]["seed"], 7)
-            self.assertEqual(cfg.kwargs["repeats"], 1)
+    def test_map_criteria_to_evalscope_regex(self):
+        criteria = [
+            cast(Any, SimpleNamespace(
+                id="1", type="regex",
+                config_json='{"pattern": "\\\\d+", "match_mode": "search"}',
+            )),
+        ]
+        result = map_criteria_to_evalscope(criteria)
+        self.assertIn("regex_match", result["metric_list"])
+        self.assertEqual(result["extra_params"]["pattern"], "\\d+")
 
-    def test_build_evalscope_task_config_requires_api_key(self):
-        fake_config_module = types.ModuleType("evalscope.config")
-
-        class FakeTaskConfig:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        setattr(fake_config_module, "TaskConfig", FakeTaskConfig)
-
-        with patch.dict(sys.modules, {"evalscope.config": fake_config_module}):
-            model = cast(
-                Any,
-                SimpleNamespace(name="m", endpoint_url="http://api", api_key="  "),
-            )
-            dataset = cast(Any, SimpleNamespace(source_uri="a/b/case.json"))
-
-            with self.assertRaises(ValueError):
-                build_evalscope_task_config(
-                    model=model,
-                    dataset=dataset,
-                    evalscope_input_root="root",
-                    params={},
-                    repeat_count=1,
-                    work_dir="work",
-                )
-
-    def test_run_evalscope_task_returns_dict_or_wraps_result(self):
-        fake_run_module = types.ModuleType("evalscope.run")
-
-        def fake_run_dict(task_cfg):
-            return {"ok": True}
-
-        setattr(fake_run_module, "run_task", fake_run_dict)
-
-        with patch.dict(sys.modules, {"evalscope.run": fake_run_module}):
-            self.assertEqual(run_evalscope_task(task_cfg={"x": 1}), {"ok": True})
-
-        def fake_run_non_dict(task_cfg):
-            return "done"
-
-        fake_run_module_2 = types.ModuleType("evalscope.run")
-        setattr(fake_run_module_2, "run_task", fake_run_non_dict)
-
-        with patch.dict(sys.modules, {"evalscope.run": fake_run_module_2}):
-            self.assertEqual(
-                run_evalscope_task(task_cfg={"x": 2}), {"result": "done"}
-            )
+    def test_map_criteria_to_evalscope_llm_judge(self):
+        criteria = [
+            cast(Any, SimpleNamespace(
+                id="1", type="llm_judge",
+                config_json=json.dumps({
+                    "endpoint_url": "http://judge:8000/v1",
+                    "api_key": "key",
+                    "model_name": "gpt-4",
+                    "system_prompt": "You are a judge.",
+                }),
+            )),
+        ]
+        result = map_criteria_to_evalscope(criteria)
+        self.assertEqual(result["judge_strategy"], "llm")
+        self.assertEqual(result["judge_model_args"]["api_url"], "http://judge:8000/v1")
+        self.assertEqual(result["judge_model_args"]["model_id"], "gpt-4")
 
     async def test_extract_primary_score_from_report(self):
         with tempfile.TemporaryDirectory() as tmpdir:

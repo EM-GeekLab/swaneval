@@ -164,3 +164,20 @@ class ResourceError(EvalPipelineError):
 
     error_code = "RESOURCE_ERROR"
     retryable = True
+
+
+# ── EvalScope Service Errors ─────────────────────────────────────
+
+
+class EvalScopeServiceError(EvalPipelineError):
+    """EvalScope HTTP service unavailable or returned an error."""
+
+    error_code = "EVALSCOPE_SERVICE_ERROR"
+    retryable = True
+
+
+class EvalScopeTimeoutError(EvalScopeServiceError):
+    """EvalScope evaluation timed out."""
+
+    error_code = "EVALSCOPE_TIMEOUT"
+    retryable = True

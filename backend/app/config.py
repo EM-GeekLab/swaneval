@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     SANDBOX_MAX_OUTPUT_BYTES: int = 1_048_576
     SANDBOX_ALLOWED: bool = True
 
+    # ── EvalScope 服务 / EvalScope evaluation service ──
+    EVALSCOPE_SERVICE_URL: str = "http://localhost:9000"
+    # EvalScope HTTP 服务地址 / EvalScope service URL
+    EVALSCOPE_ENABLED: bool = True
+    # 主开关：False 时回退到 legacy evaluators.py / Master switch
+    EVALSCOPE_TIMEOUT_SECONDS: int = 3600
+    # 单次评测最大超时(秒) / Max timeout per evaluation invoke
+    EVALSCOPE_POLL_INTERVAL: int = 5
+    # 进度轮询间隔(秒) / Progress polling interval
+    EVALSCOPE_SANDBOX_URL: str = ""
+    # 远程沙箱地址 / Remote sandbox URL (ms-enclave or VolcEngine)
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
