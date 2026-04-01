@@ -8,6 +8,7 @@ retrieve per-token log-probabilities, then computing standard perplexity:
     PPL = exp( -1/N * sum(log P(token_i | context)) )
 """
 
+import asyncio
 import logging
 import math
 
@@ -64,10 +65,14 @@ async def compute_perplexity_batch(
             logger.warning("Perplexity computation failed: %s", e)
             return float("inf")
 
-    async with httpx.AsyncClient() as client:
-        import asyncio
+    semaphore = asyncio.Semaphore(max_concurrent)
 
-        tasks = [_compute_one(client, text) for text in texts]
+    async def _limited(client: httpx.AsyncClient, text: str) -> float:
+        async with semaphore:
+            return await _compute_one(client, text)
+
+    async with httpx.AsyncClient() as client:
+        tasks = [_limited(client, text) for text in texts]
         return list(await asyncio.gather(*tasks))
 
 

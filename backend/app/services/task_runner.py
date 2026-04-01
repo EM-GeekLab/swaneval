@@ -327,37 +327,75 @@ async def _run_task_via_evalscope_service(
         task_id,
     )
 
-    # 6. Ingest results — try HTTP response first, fall back to file artifacts
-    first_criterion = criteria[0]
-    first_dataset = datasets[0]
+    # 6. Build prompt → dataset_id mapping for correct attribution
+    prompt_to_dataset: dict[str, uuid.UUID] = {}
+    for ds in datasets:
+        stem = Path(ds.source_uri).stem
+        ds_input_key = f"{work_dir_key}/input/general_qa/{stem}.jsonl"
+        try:
+            text = await storage.read_text(ds_input_key)
+            for line in text.splitlines():
+                line = line.strip()
+                if line:
+                    row_data = json.loads(line)
+                    q = row_data.get("query", "")
+                    if q:
+                        prompt_to_dataset[q] = ds.id
+        except Exception:
+            pass  # Mapping failure is non-fatal; will use default
 
-    # Use file-based ingestion (proven path) since service response
-    # format may vary across EvalScope versions
-    stem = Path(first_dataset.source_uri).stem
-    input_key = f"{work_dir_key}/input/general_qa/{stem}.jsonl"
+    # 7. Ingest results from EvalScope output artifacts
     score = await extract_primary_score(storage, work_dir_key)
     ingested_results = await ingest_evalscope_results(
         storage=storage,
         work_dir_key=work_dir_key,
-        input_jsonl_key=input_key,
+        input_jsonl_key=None,
         default_score=score,
     )
 
-    for row in ingested_results:
-        result = EvalResult(
-            task_id=task_id,
-            subtask_id=subtask.id,
-            dataset_id=first_dataset.id,
-            criterion_id=first_criterion.id,
-            prompt_text=row["prompt_text"],
-            expected_output=row["expected_output"],
-            model_output=row["model_output"],
-            score=row["score"],
-            latency_ms=row["latency_ms"],
-            tokens_generated=row["tokens_generated"],
-            first_token_ms=row["first_token_ms"],
+    # Fallback: per-dataset input JSONL if no artifacts found
+    if not ingested_results:
+        for ds in datasets:
+            stem = Path(ds.source_uri).stem
+            ds_input_key = f"{work_dir_key}/input/general_qa/{stem}.jsonl"
+            ds_rows = await ingest_evalscope_results(
+                storage=storage,
+                work_dir_key=work_dir_key,
+                input_jsonl_key=ds_input_key,
+                default_score=score,
+            )
+            ingested_results.extend(ds_rows)
+
+    if len(criteria) > 1:
+        logger.warning(
+            "Task %s: %d criteria in single EvalScope run — "
+            "per-criterion scoring not yet supported, sharing scores",
+            task_id, len(criteria),
         )
-        session.add(result)
+
+    # 8. Create EvalResult entries with correct dataset/criterion attribution
+    default_dataset_id = datasets[0].id
+    total_results = 0
+    for row in ingested_results:
+        dataset_id = prompt_to_dataset.get(
+            row["prompt_text"], default_dataset_id
+        )
+        for criterion in criteria:
+            result = EvalResult(
+                task_id=task_id,
+                subtask_id=subtask.id,
+                dataset_id=dataset_id,
+                criterion_id=criterion.id,
+                prompt_text=row["prompt_text"],
+                expected_output=row["expected_output"],
+                model_output=row["model_output"],
+                score=row["score"],
+                latency_ms=row["latency_ms"],
+                tokens_generated=row["tokens_generated"],
+                first_token_ms=row["first_token_ms"],
+            )
+            session.add(result)
+            total_results += 1
 
     subtask.last_completed_index = (
         len(ingested_results) if ingested_results else total_converted
@@ -371,8 +409,77 @@ async def _run_task_via_evalscope_service(
     await session.commit()
 
     logger.info(
-        "Task %s: EvalScope path completed — %d results ingested",
-        task_id, len(ingested_results),
+        "Task %s: EvalScope path completed — %d results ingested "
+        "(%d datasets, %d criteria)",
+        task_id, total_results, len(datasets), len(criteria),
+    )
+
+
+async def _run_perplexity_criteria(
+    session: AsyncSession,
+    storage: StorageBackend,
+    task: EvalTask,
+    subtask: EvalSubtask,
+    model: LLMModel,
+    dataset_ids: list[uuid.UUID],
+    criteria: list[Criterion],
+):
+    """Run perplexity evaluation locally via vLLM logprobs API."""
+    from app.services.perplexity import compute_perplexity_batch, ppl_to_score
+
+    all_texts: list[tuple[uuid.UUID, str]] = []
+    for ds_id in dataset_ids:
+        ds = await session.get(Dataset, ds_id)
+        if not ds:
+            continue
+        try:
+            rows = await _load_dataset_rows(storage, ds.source_uri)
+        except Exception as e:
+            logger.warning("Perplexity: failed to load dataset %s: %s", ds_id, e)
+            continue
+        for row in rows:
+            text = (
+                row.get("query") or row.get("prompt")
+                or row.get("input") or row.get("question") or ""
+            )
+            if text:
+                all_texts.append((ds_id, str(text)))
+
+    if not all_texts:
+        logger.warning("Task %s: no texts found for perplexity computation", task.id)
+        return
+
+    api_key = (model.api_key or "").strip() or "EMPTY"
+    model_name = model.model_name or model.name
+
+    ppls = await compute_perplexity_batch(
+        endpoint_url=model.endpoint_url,
+        model_name=model_name,
+        api_key=api_key,
+        texts=[t for _, t in all_texts],
+    )
+
+    for criterion in criteria:
+        for (ds_id, text), ppl in zip(all_texts, ppls):
+            result = EvalResult(
+                task_id=task.id,
+                subtask_id=subtask.id,
+                dataset_id=ds_id,
+                criterion_id=criterion.id,
+                prompt_text=text,
+                expected_output="",
+                model_output=f"ppl={ppl:.4f}",
+                score=ppl_to_score(ppl),
+                latency_ms=0.0,
+                tokens_generated=0,
+                first_token_ms=0.0,
+            )
+            session.add(result)
+
+    await session.commit()
+    logger.info(
+        "Task %s: perplexity computed for %d texts across %d criteria",
+        task.id, len(all_texts), len(criteria),
     )
 
 
@@ -748,6 +855,52 @@ async def run_task(task_id: uuid.UUID):
                     criteria=evalscope_criteria,
                     params=params,
                 )
+
+                # Run perplexity criteria locally (not supported by EvalScope)
+                if perplexity_criteria:
+                    logger.info(
+                        "Task %s: running %d perplexity criteria locally",
+                        task_id, len(perplexity_criteria),
+                    )
+                    ppl_subtask = EvalSubtask(
+                        task_id=task_id,
+                        run_index=1,
+                        status=TaskStatus.running,
+                        progress_pct=0.0,
+                    )
+                    session.add(ppl_subtask)
+                    await session.commit()
+                    await session.refresh(ppl_subtask)
+                    try:
+                        await _run_perplexity_criteria(
+                            session=session,
+                            storage=storage,
+                            task=task,
+                            subtask=ppl_subtask,
+                            model=model,
+                            dataset_ids=dataset_ids,
+                            criteria=perplexity_criteria,
+                        )
+                        ppl_subtask.status = TaskStatus.completed
+                        ppl_subtask.progress_pct = 100.0
+                    except Exception as e:
+                        logger.error(
+                            "Task %s: perplexity computation failed: %s",
+                            task_id, e,
+                        )
+                        ppl_subtask.status = TaskStatus.failed
+                        ppl_subtask.error_log = str(e)
+                    session.add(ppl_subtask)
+                    await session.commit()
+
+                # Warn about unsupported criteria
+                if custom_script_criteria:
+                    logger.warning(
+                        "Task %s: %d custom_script criteria skipped — "
+                        "not yet supported alongside EvalScope service",
+                        task_id, len(custom_script_criteria),
+                    )
+
                 task.status = TaskStatus.completed
                 task.finished_at = datetime.now(timezone.utc)
                 session.add(task)

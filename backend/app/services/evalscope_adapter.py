@@ -184,6 +184,7 @@ _PRESET_METRIC_MAP: dict[str, str] = {
     "f1": "f1",
     "numeric": "math_acc",
     "cosine_similarity": "semscore",
+    "pass_at_k": "pass_at_k",
     # perplexity is handled locally, NOT sent to EvalScope
 }
 
@@ -221,12 +222,26 @@ def map_criteria_to_evalscope(
                 )
 
         elif c.type == "regex":
+            if "pattern" in extra_params:
+                logger.warning(
+                    "Criterion %s: multiple regex criteria not supported "
+                    "in a single EvalScope run — only the last pattern "
+                    "will be used",
+                    c.id,
+                )
             metric_list.append("regex_match")
             extra_params["pattern"] = cfg.get("pattern", "")
             if cfg.get("match_mode"):
                 extra_params["match_mode"] = cfg["match_mode"]
 
         elif c.type == "llm_judge":
+            if judge_model_args is not None:
+                logger.warning(
+                    "Criterion %s: multiple llm_judge criteria not "
+                    "supported in a single EvalScope run — only the "
+                    "last judge config will be used",
+                    c.id,
+                )
             judge_strategy = "llm"
             judge_model_args = {}
             if cfg.get("endpoint_url"):

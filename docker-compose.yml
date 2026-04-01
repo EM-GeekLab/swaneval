@@ -58,7 +58,7 @@ services:
       redis:
         condition: service_healthy
       evalscope:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -129,7 +129,7 @@ services:
       redis:
         condition: service_healthy
       evalscope:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     profiles:
       - worker

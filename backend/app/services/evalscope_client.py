@@ -80,10 +80,13 @@ class EvalScopeClient:
                     json=config,
                 )
                 if resp.status_code >= 400:
-                    raise EvalScopeServiceError(
-                        f"EvalScope returned {resp.status_code}: "
-                        f"{resp.text[:500]}"
+                    error_holder.append(
+                        EvalScopeServiceError(
+                            f"EvalScope returned {resp.status_code}: "
+                            f"{resp.text[:500]}"
+                        )
                     )
+                    return
                 result_holder["data"] = resp.json()
             except httpx.TimeoutException as e:
                 error_holder.append(
@@ -92,8 +95,6 @@ class EvalScopeClient:
                         f"{self.timeout}s: {e}"
                     )
                 )
-            except EvalScopeServiceError:
-                raise
             except Exception as e:
                 error_holder.append(
                     EvalScopeServiceError(
