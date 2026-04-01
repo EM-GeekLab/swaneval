@@ -5,11 +5,13 @@ API process enqueues tasks; independent worker processes dequeue and execute.
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 
 from app.config import settings
+from app.services.task_failures import ensure_task_failed_in_db
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +111,24 @@ async def unregister_worker(worker_id: str) -> None:
     await r.hdel(WORKER_KEY, worker_id)
 
 
-async def _safe_redis(coro, description: str) -> None:
-    """Await a Redis coroutine, swallowing errors so the worker loop survives."""
+async def _best_effort_worker_bookkeeping(
+    worker_id: str,
+    action: str,
+    operation: Callable[..., Awaitable[None]],
+    *args: str,
+) -> bool:
+    """Run non-critical worker Redis writes without letting failures kill the loop."""
     try:
-        await coro
-    except Exception:
-        logger.debug("Redis unavailable during %s", description)
+        await operation(*args)
+    except Exception as exc:
+        logger.warning(
+            "Embedded worker %s: unable to %s because Redis is unavailable: %s",
+            worker_id,
+            action,
+            exc,
+        )
+        return False
+    return True
 
 
 async def embedded_worker_loop() -> None:
@@ -129,52 +143,70 @@ async def embedded_worker_loop() -> None:
     from app.services.task_runner import run_task
 
     worker_id = f"embedded-{_uuid.uuid4().hex[:8]}"
-    await register_worker(worker_id)
     logger.info("Embedded worker %s started", worker_id)
 
     redis_fail_count = 0
-    _MAX_REDIS_FAILURES = 10
+    max_redis_failures = 10
+    worker_registered = await _best_effort_worker_bookkeeping(
+        worker_id, "register worker", register_worker, worker_id
+    )
 
     try:
         while True:
-            await _safe_redis(
-                update_worker_status(worker_id, "idle"),
-                "update worker idle",
-            )
+            if worker_registered:
+                worker_registered = await _best_effort_worker_bookkeeping(
+                    worker_id,
+                    "set worker status to idle",
+                    update_worker_status,
+                    worker_id,
+                    "idle",
+                )
             try:
                 job = await dequeue_task(timeout=3)
                 redis_fail_count = 0  # Reset on success
             except Exception:
                 redis_fail_count += 1
-                if redis_fail_count >= _MAX_REDIS_FAILURES:
+                worker_registered = False
+                if redis_fail_count >= max_redis_failures:
                     logger.error(
                         "Embedded worker %s: Redis unreachable for %d consecutive attempts",
                         worker_id, redis_fail_count,
                     )
-                    await _safe_redis(
-                        update_worker_status(worker_id, "redis_unhealthy"),
-                        "update worker redis_unhealthy",
+                    await _best_effort_worker_bookkeeping(
+                        worker_id,
+                        "set worker status to redis_unhealthy",
+                        update_worker_status,
+                        worker_id,
+                        "redis_unhealthy",
                     )
                 else:
                     logger.warning(
                         "Embedded worker %s: Redis connection error (attempt %d)",
                         worker_id, redis_fail_count,
                     )
-                await asyncio.sleep(5)
+                await asyncio.sleep(min(5 * redis_fail_count, 30))
                 continue
 
             if job is None:
                 continue
 
+            if not worker_registered:
+                worker_registered = await _best_effort_worker_bookkeeping(
+                    worker_id, "register worker", register_worker, worker_id
+                )
+
             task_id = job["task_id"]
             logger.info("Embedded worker picked up task %s", task_id)
-            await _safe_redis(
-                update_worker_status(worker_id, "busy"),
-                "update worker busy",
-            )
-            await _safe_redis(
-                mark_running(task_id, worker_id),
-                f"mark_running {task_id}",
+            if worker_registered:
+                worker_registered = await _best_effort_worker_bookkeeping(
+                    worker_id,
+                    "set worker status to busy",
+                    update_worker_status,
+                    worker_id,
+                    "busy",
+                )
+            await _best_effort_worker_bookkeeping(
+                worker_id, f"mark task {task_id} as running", mark_running, task_id, worker_id
             )
 
             try:
@@ -183,37 +215,13 @@ async def embedded_worker_loop() -> None:
                 logger.exception("Embedded worker: task %s failed", task_id)
                 await ensure_task_failed_in_db(task_id)
             finally:
-                await _safe_redis(
-                    mark_done(task_id),
-                    f"mark_done {task_id}",
+                await _best_effort_worker_bookkeeping(
+                    worker_id, f"mark task {task_id} as done", mark_done, task_id
                 )
     except asyncio.CancelledError:
         pass  # Normal shutdown
     finally:
-        await unregister_worker(worker_id)
+        await _best_effort_worker_bookkeeping(
+            worker_id, "unregister worker", unregister_worker, worker_id
+        )
         logger.info("Embedded worker %s stopped", worker_id)
-
-
-async def ensure_task_failed_in_db(task_id: str) -> None:
-    """Defensive: ensure task status is 'failed' in DB if not already terminal.
-
-    Shared by embedded_worker_loop and the standalone worker process.
-    """
-    try:
-        import uuid as _uuid
-
-        from sqlmodel.ext.asyncio.session import AsyncSession
-
-        from app.database import engine
-        from app.models.eval_task import EvalTask, TaskStatus
-
-        async with AsyncSession(engine) as session:
-            task = await session.get(EvalTask, _uuid.UUID(task_id))
-            if task and task.status not in (TaskStatus.failed, TaskStatus.completed):
-                task.status = TaskStatus.failed
-                task.finished_at = datetime.now(timezone.utc)
-                session.add(task)
-                await session.commit()
-                logger.info("Task %s defensively marked as FAILED in DB", task_id)
-    except Exception:
-        logger.exception("Failed to defensively update task %s status", task_id)

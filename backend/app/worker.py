@@ -30,9 +30,9 @@ def _handle_signal(sig, frame):
 
 async def run_worker():
     """Main worker loop: dequeue tasks and execute them."""
+    from app.services.task_failures import ensure_task_failed_in_db
     from app.services.task_queue import (
         dequeue_task,
-        ensure_task_failed_in_db,
         mark_done,
         mark_running,
         register_worker,
